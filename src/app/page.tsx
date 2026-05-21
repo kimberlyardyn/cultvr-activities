@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 import { LandingPlant } from "@/components/landing-plant";
+import { PublicNav } from "@/components/public-nav";
 
 export default function Home() {
   return (
@@ -15,49 +16,23 @@ export default function Home() {
         gridTemplateRows: "auto 1fr auto",
       }}
     >
-      <header className="flex items-center justify-between gap-4">
-        <Link className="flex items-center gap-3" href="/">
-          <span className="flex size-9 items-center justify-center rounded-full bg-[#1F2433] font-serif text-xl italic text-[#ECE6E0]">
-            c
-          </span>
-          <span className="font-serif text-2xl italic">cultivr</span>
-        </Link>
-
-        <nav className="hidden items-center gap-8 text-sm text-[#1F2433]/80 md:flex">
-          <Link className="transition hover:text-[#1F2433]" href="/dashboard">
-            Almanac
-          </Link>
-          <Link className="transition hover:text-[#1F2433]" href="/dashboard">
-            Stories
-          </Link>
-          <Link className="transition hover:text-[#1F2433]" href="/dashboard">
-            Pricing
-          </Link>
-          <Link
-            className="rounded-full border border-[#1F2433]/10 px-4 py-2 text-[#1F2433]"
-            href="/login"
-          >
-            Sign in
-          </Link>
-        </nav>
-      </header>
+      <PublicNav />
 
       <section className="mx-auto grid w-full max-w-7xl items-center gap-8 py-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:px-5 md:py-0">
         <div className="max-w-xl">
           <p className="inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             <span className="size-1.5 animate-pulse rounded-full bg-[#C97A5D]" />
-            A quiet place for your college story
+            College counseling workspace
           </p>
           <h1 className="mt-6 font-serif text-6xl leading-none text-[#1F2433] md:text-7xl lg:text-8xl">
-            Plant the seed.
+            Clear planning.
             <br />
-            Tend the{" "}
-            <em className="italic text-[#3F4A66]">story</em>.
+            Stronger{" "}
+            <em className="italic text-[#3F4A66]">applications</em>.
           </h1>
           <p className="mt-6 max-w-md text-base leading-7 text-[#1F2433]/65">
-            Cultivr is a paper-soft journal for your four years: activities,
-            awards, reflections, and the small moments that shape who you
-            become. One almanac, slowly grown.
+            Cultivr helps students and counselors keep activities, awards,
+            essays, goals, and follow-ups organized in one calm workspace.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -65,14 +40,14 @@ export default function Home() {
               className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#1F2433] px-5 text-sm font-medium text-[#ECE6E0] transition hover:bg-[#0F1322]"
               href="/login"
             >
-              Start your journey
+              Start workspace
               <ArrowRight size={16} />
             </Link>
             <Link
               className="inline-flex h-12 items-center justify-center rounded-full border border-[#1F2433]/10 px-5 text-sm font-medium text-[#1F2433] transition hover:bg-[#1F2433]/5"
-              href="/dashboard"
+              href="/about"
             >
-              See how it works
+              Learn more
             </Link>
           </div>
         </div>
