@@ -1,0 +1,26 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+import { env } from "@/lib/env";
+
+export async function createClient() {
+  const cookieStore = await cookies();
+
+  return createServerClient(env.supabaseUrl, env.supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options),
+          );
+        } catch {
+          // Server components cannot always set cookies. Route handlers and
+          // server actions can, and middleware can be added when needed.
+        }
+      },
+    },
+  });
+}

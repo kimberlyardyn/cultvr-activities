@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cultvr MVP
 
-## Getting Started
+Cultvr is a lightweight college counseling workspace for high school students.
+This MVP includes:
 
-First, run the development server:
+- Landing page
+- Supabase email/password and magic-link auth
+- Protected dashboard
+- Notes, goals, tasks, activities, and document upload
+- OpenAI chat counseling endpoint
+- OpenAI Realtime voice session endpoint with ephemeral client secrets
+
+## Local Setup
+
+1. Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create environment variables:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Fill in at least:
 
-## Learn More
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+OPENAI_API_KEY=
+```
 
-To learn more about Next.js, take a look at the following resources:
+4. In Supabase, open the SQL editor and run:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+supabase/schema.sql
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Start the app:
 
-## Deploy on Vercel
+```bash
+pnpm dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open `http://localhost:3000`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Required Services
+
+### Supabase
+
+Create a Supabase project and copy:
+
+- Project URL -> `NEXT_PUBLIC_SUPABASE_URL`
+- Project publishable key -> `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- Service role key -> `SUPABASE_SERVICE_ROLE_KEY`
+- Postgres connection string -> `DATABASE_URL`
+
+Then run `supabase/schema.sql`.
+
+In Supabase Auth, add redirect URLs:
+
+```text
+http://localhost:3000/auth/callback
+https://YOUR_DOMAIN/auth/callback
+```
+
+### OpenAI
+
+Create an OpenAI API key and set:
+
+```bash
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_REALTIME_MODEL=gpt-realtime
+```
+
+The chat route uses the Responses API. The voice route uses Realtime client
+secrets and WebRTC so the browser never receives the standard API key.
+
+### Vercel
+
+Create or link a Vercel project, then add all production environment variables
+in Project Settings -> Environment Variables.
+
+Required for deploy automation:
+
+```bash
+VERCEL_TOKEN=
+VERCEL_ORG_ID=
+VERCEL_PROJECT_ID=
+```
+
+## Deployment Checklist
+
+1. Push the repo to GitHub.
+2. Create a Supabase project.
+3. Run `supabase/schema.sql`.
+4. Create an OpenAI API key.
+5. Create a Vercel project from the repo.
+6. Add Vercel env vars for Production and Preview.
+7. Add Supabase Auth redirect URLs for Vercel preview and production domains.
+8. Deploy.
+
+## Useful Commands
+
+```bash
+pnpm dev
+pnpm lint
+pnpm build
+```
+
+## Notes
+
+This MVP intentionally keeps records student-owned with Row Level Security.
+Future versions should add counselor/parent organizations, consent controls,
+audit logs, retention settings, and moderation/safety review for minors.
