@@ -37,6 +37,19 @@ button {
   cursor: pointer;
 }
 
+/* Login card mode-switch fade — used by the form + helper text on /login
+   so the new content fades in when the user toggles Sign in / Create / Magic link. */
+@keyframes loginFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Font preference: when sans is selected, override .font-serif within the workspace */
 [data-cultvr-font="sans"] .font-serif,
 [data-cultvr-font="sans"] [class*="font-serif"] {

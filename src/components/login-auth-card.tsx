@@ -1,7 +1,13 @@
 "use client";
 
 import { ArrowRight, KeyRound, Mail, UserRound } from "lucide-react";
-import { useState, type InputHTMLAttributes, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
 
 import {
   signInWithMagicLink,
@@ -23,6 +29,24 @@ const modes: Array<{ id: AuthMode; label: string }> = [
 
 export function LoginAuthCard({ message }: LoginAuthCardProps) {
   const [mode, setMode] = useState<AuthMode>("signin");
+
+  // Animated height: measure the inner content and transition the wrapper height.
+  // Lets the card size to whichever mode is selected without leaving dead space,
+  // while still feeling smooth when switching between modes.
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      if (typeof h === "number") setContentHeight(h);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const action =
     mode === "signup"
       ? signUpWithPassword
@@ -73,67 +97,73 @@ export function LoginAuthCard({ message }: LoginAuthCardProps) {
           </div>
         ) : null}
 
-        <form action={action} className="mt-5 grid content-start gap-4 min-h-[20.5rem]">
-          {mode === "signup" ? (
-            <Field
-              autoComplete="name"
-              icon={<UserRound size={17} />}
-              label="Student name"
-              name="fullName"
-              placeholder="Your name"
-              required
-            />
-          ) : (
-            <FieldSpacer />
-          )}
+        {/* Smoothly animates between modes — the outer wrapper transitions to the
+            measured inner height, while the inner content fades in on remount. */}
+        <div
+          className="mt-5 overflow-hidden transition-[height] duration-300 ease-out"
+          style={{ height: contentHeight }}
+        >
+          <div ref={innerRef}>
+            <form
+              action={action}
+              className="grid content-start gap-4 motion-safe:animate-[loginFadeIn_240ms_ease-out]"
+              key={mode}
+            >
+              {mode === "signup" ? (
+                <Field
+                  autoComplete="name"
+                  icon={<UserRound size={17} />}
+                  label="Student name"
+                  name="fullName"
+                  placeholder="Your name"
+                  required
+                />
+              ) : null}
 
-          <Field
-            autoComplete="email"
-            icon={<Mail size={17} />}
-            label="Email"
-            name="email"
-            placeholder="you@example.com"
-            required
-            type="email"
-          />
+              <Field
+                autoComplete="email"
+                icon={<Mail size={17} />}
+                label="Email"
+                name="email"
+                placeholder="you@example.com"
+                required
+                type="email"
+              />
 
-          {mode !== "magic" ? (
-            <Field
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              icon={<KeyRound size={17} />}
-              label="Password"
-              minLength={mode === "signup" ? 8 : undefined}
-              name="password"
-              placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-              required
-              type="password"
-            />
-          ) : (
-            <FieldSpacer />
-          )}
+              {mode !== "magic" ? (
+                <Field
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  icon={<KeyRound size={17} />}
+                  label="Password"
+                  minLength={mode === "signup" ? 8 : undefined}
+                  name="password"
+                  placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
+                  required
+                  type="password"
+                />
+              ) : null}
 
-          <button className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#1F2433] px-5 text-sm font-medium text-[#F6F0E8] transition hover:bg-[#0F1322]">
-            {mode === "signup" ? "Create account" : mode === "magic" ? "Send magic link" : "Sign in"}
-            <ArrowRight size={16} />
-          </button>
-        </form>
+              <button className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#1F2433] px-5 text-sm font-medium text-[#F6F0E8] transition hover:bg-[#0F1322]">
+                {mode === "signup" ? "Create account" : mode === "magic" ? "Send magic link" : "Sign in"}
+                <ArrowRight size={16} />
+              </button>
+            </form>
 
-        <p className="mt-5 min-h-[3rem] text-sm leading-6 text-[#1F2433]/62">
-          {mode === "signup"
-            ? "You may need to confirm your email before entering the workspace."
-            : mode === "magic"
-              ? "Use this when you do not want to type a password."
-              : "Use your password, or switch to magic link for email-only access."}
-        </p>
+            <p
+              className="mt-5 text-sm leading-6 text-[#1F2433]/62 motion-safe:animate-[loginFadeIn_240ms_ease-out]"
+              key={`hint-${mode}`}
+            >
+              {mode === "signup"
+                ? "You may need to confirm your email before entering the workspace."
+                : mode === "magic"
+                  ? "Use this when you do not want to type a password."
+                  : "Use your password, or switch to magic link for email-only access."}
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );
-}
-
-function FieldSpacer() {
-  // Invisible placeholder that takes up the same vertical space as a Field —
-  // keeps the form layout stable when fields appear/disappear between modes.
-  return <span aria-hidden="true" className="block h-[4.75rem]" />;
 }
 
 function Field({
