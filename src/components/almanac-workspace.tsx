@@ -4,29 +4,42 @@ import {
   BookOpen,
   CalendarClock,
   Compass,
+  FileUp,
   Leaf,
   LogOut,
-  Mic,
-  MicOff,
   NotebookPen,
-  PenLine,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelTopClose,
+  PanelTopOpen,
   Plus,
+  ListTodo,
   Settings,
   Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { signOut } from "@/app/actions";
 import {
   createActivity,
   createGoal,
-  createNote,
+  createTask,
+  uploadDocument,
 } from "@/app/dashboard/actions";
-import { VoicePanel } from "@/components/voice-panel";
+import { ChatPanel } from "@/components/chat-panel";
+import { GuidedSessionsView } from "@/components/guided-sessions-view";
 import type { Activity, Award, Goal, Note, StudentTask } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
-type Tab = "overview" | "activities" | "discover" | "goals" | "notes" | "timeline";
+type Tab =
+  | "overview"
+  | "activities"
+  | "discover"
+  | "goals"
+  | "sessions"
+  | "action-plan"
+  | "timeline";
 
 type AlmanacWorkspaceProps = {
   userEmail: string | null;
@@ -35,6 +48,7 @@ type AlmanacWorkspaceProps = {
   tasks: StudentTask[];
   activities: Activity[];
   awards: Award[];
+  initialTab?: string;
 };
 
 const palette = {
@@ -52,9 +66,8 @@ const palette = {
 
 const nav = [
   { id: "overview", label: "Dashboard", icon: BookOpen },
-  { id: "activities", label: "Activities", icon: Leaf },
-  { id: "goals", label: "Goals", icon: Target },
-  { id: "notes", label: "Notes", icon: NotebookPen },
+  { id: "sessions", label: "Guided Session", icon: NotebookPen },
+  { id: "action-plan", label: "Action plan", icon: ListTodo },
   { id: "timeline", label: "Timeline", icon: CalendarClock },
   { id: "discover", label: "Discover", icon: Compass },
 ] satisfies Array<{ id: Tab; label: string; icon: typeof BookOpen }>;
@@ -66,22 +79,69 @@ export function AlmanacWorkspace({
   tasks,
   activities,
   awards,
+  initialTab,
 }: AlmanacWorkspaceProps) {
-  const [tab, setTab] = useState<Tab>("overview");
-  const [voiceOpen, setVoiceOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [tab, setTabState] = useState<Tab>(
+    initialTab === "overview" ||
+      initialTab === "sessions" ||
+      initialTab === "activities" ||
+      initialTab === "goals" ||
+      initialTab === "action-plan" ||
+      initialTab === "timeline" ||
+      initialTab === "discover"
+      ? initialTab
+      : "overview",
+  );
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [navLayout, setNavLayoutState] = useState<"left" | "top">("left");
+  const [navCollapsed, setNavCollapsedState] = useState(false);
+  const [topNavCollapsed, setTopNavCollapsedState] = useState(false);
   const [customName, setCustomName] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("cultvr-nav-layout");
+    const savedCollapsed = localStorage.getItem("cultvr-nav-collapsed");
+    const savedTopCollapsed = localStorage.getItem("cultvr-top-nav-collapsed");
     if (saved === "left" || saved === "top") setNavLayoutState(saved); // eslint-disable-line react-hooks/set-state-in-effect
+    if (savedCollapsed === "true") setNavCollapsedState(true);
+    if (savedTopCollapsed === "true") setTopNavCollapsedState(true);
   }, []);
 
   const setNavLayout = (v: "left" | "top") => {
     setNavLayoutState(v);
     localStorage.setItem("cultvr-nav-layout", v);
     setPrefsOpen(false);
+  };
+
+  const setNavCollapsed = (value: boolean) => {
+    setNavCollapsedState(value);
+    localStorage.setItem("cultvr-nav-collapsed", String(value));
+    setPrefsOpen(false);
+  };
+
+  const setTopNavCollapsed = (value: boolean) => {
+    setTopNavCollapsedState(value);
+    localStorage.setItem("cultvr-top-nav-collapsed", String(value));
+    setPrefsOpen(false);
+  };
+
+  const setTab = (next: Tab) => {
+    setTabState(next);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "overview") {
+      params.delete("tab");
+    } else {
+      params.set("tab", next);
+    }
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   const firstName = customName || getDisplayName(userEmail);
@@ -118,7 +178,7 @@ export function AlmanacWorkspace({
 
   return (
     <main
-      className="h-screen overflow-hidden text-[color:var(--almanac-ink)]"
+      className="min-h-[100dvh] overflow-x-hidden text-[color:var(--almanac-ink)] lg:h-[100dvh] lg:overflow-hidden"
       style={
         {
           "--almanac-paper": palette.paper,
@@ -137,57 +197,76 @@ export function AlmanacWorkspace({
         } as React.CSSProperties
       }
     >
-      <div className={["flex h-full", navLayout === "top" ? "flex-col" : ""].join(" ")}>
+      <div
+        className={["flex min-h-[100dvh] lg:h-full", navLayout === "top" ? "flex-col" : ""].join(" ")}
+      >
         {navLayout === "left" ? (
-          <aside className="hidden w-64 shrink-0 flex-col border-r border-[color:var(--almanac-rule)] bg-black/[0.018] px-6 py-7 lg:flex">
-            <Brand />
+          <aside
+            className={[
+              "hidden max-h-[100dvh] shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-[color:var(--almanac-rule)] bg-black/[0.018] py-7 transition-[width,padding] duration-200 lg:flex",
+              navCollapsed ? "w-20 px-3" : "w-64 px-6",
+            ].join(" ")}
+          >
+            <div
+              className={[
+                "flex items-center",
+                navCollapsed ? "flex-col justify-center gap-3" : "justify-between gap-3",
+              ].join(" ")}
+            >
+              <Brand compact={navCollapsed} />
+              <button
+                aria-label={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className="hidden size-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] text-[color:var(--almanac-ink-soft)] transition hover:bg-black/[0.035] hover:text-[color:var(--almanac-ink)] lg:flex"
+                onClick={() => setNavCollapsed(!navCollapsed)}
+                title={navCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                type="button"
+              >
+                {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+              </button>
+            </div>
             <nav className="mt-10 grid gap-1">
               {nav.map((item) => {
                 const active = tab === item.id;
                 return (
                   <button
                     className={[
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
+                      "flex items-center rounded-lg py-2.5 text-sm font-medium transition",
+                      navCollapsed ? "justify-center px-2" : "gap-3 px-3 text-left",
                       active
                         ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
                         : "text-[color:var(--almanac-ink)] hover:bg-black/[0.035]",
                     ].join(" ")}
                     key={item.id}
                     onClick={() => setTab(item.id)}
+                    title={item.label}
                     type="button"
                   >
                     <item.icon
-                      className={active ? "text-[color:var(--almanac-paper)]" : "text-[color:var(--almanac-ink-soft)]"}
+                      className={[
+                        "shrink-0",
+                        active ? "text-[color:var(--almanac-paper)]" : "text-[color:var(--almanac-ink-soft)]",
+                      ].join(" ")}
                       size={16}
                     />
-                    {item.label}
+                    {navCollapsed ? null : item.label}
                   </button>
                 );
               })}
             </nav>
 
             <div className="mt-auto grid gap-2">
-              <button
-                className={[
-                  "flex items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium transition",
-                  voiceOpen
-                    ? "bg-[color:var(--almanac-clay)] text-[color:var(--almanac-paper)]"
-                    : "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]",
-                ].join(" ")}
-                onClick={() => setVoiceOpen((v) => !v)}
-                type="button"
-              >
-                {voiceOpen ? <MicOff size={16} /> : <Mic size={16} />}
-                {voiceOpen ? "End voice mode" : "Voice mode"}
-              </button>
               <div className="relative">
                 <button
-                  className="flex w-full items-center gap-3 rounded-lg border border-[color:var(--almanac-rule)] px-4 py-2.5 text-left text-sm font-medium text-[color:var(--almanac-ink)] hover:bg-black/[0.035]"
+                  className={[
+                    "flex w-full items-center rounded-lg border border-[color:var(--almanac-rule)] py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] hover:bg-black/[0.035]",
+                    navCollapsed ? "justify-center px-2" : "gap-3 px-4 text-left",
+                  ].join(" ")}
                   onClick={() => setPrefsOpen((v) => !v)}
+                  title="Settings"
                   type="button"
                 >
                   <Settings size={16} className="text-[color:var(--almanac-ink-soft)]" />
-                  Settings
+                  {navCollapsed ? null : "Settings"}
                 </button>
                 <PrefsPopup
                   customName={customName}
@@ -199,9 +278,15 @@ export function AlmanacWorkspace({
                 />
               </div>
               <form action={signOut}>
-                <button className="flex w-full items-center gap-3 rounded-lg border border-[color:var(--almanac-rule)] px-4 py-2.5 text-left text-sm font-medium text-[color:var(--almanac-ink)]">
+                <button
+                  className={[
+                    "flex w-full items-center rounded-lg border border-[color:var(--almanac-rule)] py-2.5 text-sm font-medium text-[color:var(--almanac-ink)]",
+                    navCollapsed ? "justify-center px-2" : "gap-3 px-4 text-left",
+                  ].join(" ")}
+                  title="Sign out"
+                >
                   <LogOut size={16} />
-                  Sign out
+                  {navCollapsed ? null : "Sign out"}
                 </button>
               </form>
             </div>
@@ -214,15 +299,24 @@ export function AlmanacWorkspace({
             setCustomName={setCustomName}
             setNavLayout={setNavLayout}
             setPrefsOpen={setPrefsOpen}
+            setTopNavCollapsed={setTopNavCollapsed}
             setTab={setTab}
             tab={tab}
-            voiceOpen={voiceOpen}
-            onVoice={() => setVoiceOpen((v) => !v)}
+            topNavCollapsed={topNavCollapsed}
           />
         )}
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <MobileBar tab={tab} setTab={setTab} onVoice={() => setVoiceOpen(true)} />
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <MobileBar
+            customName={customName}
+            navLayout={navLayout}
+            prefsOpen={prefsOpen}
+            setCustomName={setCustomName}
+            setNavLayout={setNavLayout}
+            setPrefsOpen={setPrefsOpen}
+            setTab={setTab}
+            tab={tab}
+          />
           {tab === "overview" ? (
             <Overview
               depth={depth}
@@ -235,14 +329,14 @@ export function AlmanacWorkspace({
           {tab === "activities" ? <ActivitiesView activities={activities} /> : null}
           {tab === "discover" ? <DiscoverView /> : null}
           {tab === "goals" ? <GoalsView goals={goals} /> : null}
-          {tab === "notes" ? <NotesView notes={notes} /> : null}
+          {tab === "sessions" ? <GuidedSessionsView notes={notes} /> : null}
+          {tab === "action-plan" ? <ActionPlanView /> : null}
           {tab === "timeline" ? (
             <TimelineView activities={activities} awards={awards} notes={notes} />
           ) : null}
         </section>
       </div>
 
-      {voiceOpen ? <VoiceOverlay onClose={() => setVoiceOpen(false)} /> : null}
       {prefsOpen ? (
         <div className="fixed inset-0 z-40" onClick={() => setPrefsOpen(false)} />
       ) : null}
@@ -277,29 +371,29 @@ function PrefsPopup({
   return (
     <div
       className={[
-        "absolute z-50 w-60 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-4 shadow-xl transition-all duration-150",
+        "absolute z-50 w-60 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-4 text-[0.875rem] shadow-xl transition-all duration-150",
         posClass,
         slideClass,
       ].join(" ")}
       onClick={(e) => e.stopPropagation()}
     >
-      <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+      <p className="mb-3 text-[0.68rem] font-medium uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
         Settings
       </p>
 
       <div>
-        <p className="mb-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+        <p className="mb-1.5 text-[0.74rem] font-medium text-[color:var(--almanac-ink-soft)]">
           Display name
         </p>
         <input
-          className="h-9 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 text-sm font-medium outline-none focus:border-[color:var(--almanac-olive)]"
+          className="h-9 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 text-[0.88rem] font-medium outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[color:var(--almanac-olive)]"
           onChange={(e) => setNameInput(e.target.value)}
           placeholder="Your name"
           type="text"
           value={nameInput}
         />
         <button
-          className="mt-1.5 h-7 w-full rounded-lg bg-[color:var(--almanac-ink)] text-xs font-medium text-[color:var(--almanac-paper)]"
+          className="mt-1.5 h-8 w-full rounded-lg bg-[color:var(--almanac-ink)] text-[0.75rem] font-medium text-[color:var(--almanac-paper)]"
           onClick={() => setCustomName(nameInput)}
           type="button"
         >
@@ -308,14 +402,14 @@ function PrefsPopup({
       </div>
 
       <div className="mt-4">
-        <p className="mb-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+        <p className="mb-1.5 text-[0.74rem] font-medium text-[color:var(--almanac-ink-soft)]">
           Layout
         </p>
         <div className="flex gap-1.5">
           {(["left", "top"] as const).map((layout) => (
             <button
               className={[
-                "rounded-md px-2 py-0.5 text-xs font-medium transition",
+                "rounded-md px-2.5 py-1 text-[0.75rem] font-medium transition",
                 navLayout === layout
                   ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
                   : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
@@ -336,66 +430,79 @@ function PrefsPopup({
 function TopBar({
   tab,
   setTab,
-  voiceOpen,
-  onVoice,
   prefsOpen,
   setPrefsOpen,
   navLayout,
   setNavLayout,
   customName,
   setCustomName,
+  setTopNavCollapsed,
+  topNavCollapsed,
 }: {
   tab: Tab;
   setTab: (t: Tab) => void;
-  voiceOpen: boolean;
-  onVoice: () => void;
   navLayout: "left" | "top";
   prefsOpen: boolean;
   setPrefsOpen: (fn: (v: boolean) => boolean) => void;
   setNavLayout: (v: "left" | "top") => void;
   customName: string;
   setCustomName: (v: string) => void;
+  setTopNavCollapsed: (v: boolean) => void;
+  topNavCollapsed: boolean;
 }) {
   return (
-    <header className="hidden shrink-0 items-center justify-between gap-6 border-b border-[color:var(--almanac-rule)] px-8 py-4 lg:flex">
+    <header
+      className={[
+        "hidden shrink-0 items-center justify-between border-b border-[color:var(--almanac-rule)] px-8 py-4 lg:flex",
+        topNavCollapsed ? "gap-4" : "gap-6",
+      ].join(" ")}
+    >
       <Brand />
 
-      <div className="flex items-center gap-6">
-        <nav className="flex items-center gap-6 text-sm">
+      <div className="flex min-w-0 items-center gap-4 xl:gap-6">
+        <nav
+          className={[
+            "flex min-w-0 items-center",
+            topNavCollapsed ? "gap-2" : "gap-6 text-sm",
+          ].join(" ")}
+        >
           {nav.map((item) => {
             const active = tab === item.id;
             return (
               <button
                 className={[
-                  "text-sm font-medium transition",
+                  "flex items-center font-medium transition",
+                  topNavCollapsed ? "gap-2 rounded-full px-3 py-2 text-[0.84rem]" : "text-sm",
                   active
-                    ? "text-[color:var(--almanac-ink)]"
-                    : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
+                    ? "text-[#111622]"
+                    : topNavCollapsed
+                      ? "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]"
+                      : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
                 ].join(" ")}
                 key={item.id}
                 onClick={() => setTab(item.id)}
+                aria-label={item.label}
+                title={item.label}
                 type="button"
               >
-                {item.label}
+                {topNavCollapsed ? <item.icon size={16} /> : null}
+                {topNavCollapsed ? null : item.label}
               </button>
             );
           })}
         </nav>
-
         <div className="flex items-center gap-1 border-l border-[color:var(--almanac-rule)] pl-4">
           <NavIconBtn
-            label={voiceOpen ? "End voice" : "Voice"}
-            onClick={onVoice}
-            active={voiceOpen}
+            ariaLabel={topNavCollapsed ? "Expand top navigation" : "Collapse top navigation"}
+            label={topNavCollapsed ? "Expand top navigation" : "Collapse top navigation"}
+            onClick={() => setTopNavCollapsed(!topNavCollapsed)}
           >
-            {voiceOpen ? <MicOff size={16} /> : <Mic size={16} />}
+            {topNavCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
           </NavIconBtn>
-
           <div className="relative">
             <NavIconBtn
               label="Settings"
               onClick={() => setPrefsOpen((v) => !v)}
-              active={prefsOpen}
             >
               <Settings size={16} />
             </NavIconBtn>
@@ -425,12 +532,14 @@ function NavIconBtn({
   label,
   onClick,
   active = false,
+  ariaLabel,
   type = "button",
 }: {
   children: React.ReactNode;
   label: string;
   onClick?: () => void;
   active?: boolean;
+  ariaLabel?: string;
   type?: "button" | "submit";
 }) {
   return (
@@ -442,6 +551,7 @@ function NavIconBtn({
             ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
             : "text-[color:var(--almanac-ink-soft)] hover:bg-black/[0.06] hover:text-[color:var(--almanac-ink)]",
         ].join(" ")}
+        aria-label={ariaLabel ?? label}
         onClick={onClick}
         type={type}
       >
@@ -474,7 +584,7 @@ function Overview({
   tasks: StudentTask[];
 }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
         eyebrow="Spring 2026 · Week 14"
         subtitle="Three things on your plate this week: an essay seed, a recommendation follow-up, and one clearer activity story."
@@ -489,7 +599,7 @@ function Overview({
         }
       />
 
-      <div className="grid flex-1 gap-5 overflow-hidden px-5 py-6 md:px-9 xl:grid-cols-[1.1fr_0.9fr] xl:grid-rows-[auto_1fr]">
+      <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto px-5 py-6 md:px-9 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5 md:p-6 xl:col-span-2">
           <div className="grid items-center gap-7 md:grid-cols-[15rem_1fr]">
             <div className="relative mx-auto size-52">
@@ -559,6 +669,21 @@ function Overview({
               </div>
             ))}
             {!goals.length ? <Empty label="No goals yet." /> : null}
+          </div>
+        </section>
+
+        <section className="min-h-0 overflow-y-auto rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
+          <SectionKicker>Quick capture</SectionKicker>
+          <div className="mt-4 grid gap-4">
+            <InlineTaskForm />
+            <DocumentForm />
+          </div>
+        </section>
+
+        <section className="min-h-0 overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
+          <SectionKicker>AI chat counsellor</SectionKicker>
+          <div className="mt-4">
+            <ChatPanel variant="almanac" />
           </div>
         </section>
       </div>
@@ -685,7 +810,7 @@ function DiscoverView() {
     {
       category: "Financial Aid",
       title: "FAFSA Opening Date",
-      description: "The 2026–27 FAFSA opens December 1, 2025. File early for priority aid.",
+      description: "The 2026-27 FAFSA opened by October 1, 2025. File early for priority aid.",
       color: palette.olive,
     },
     {
@@ -740,76 +865,131 @@ function InlineGoalForm() {
   );
 }
 
-function NotesView({ notes }: { notes: Note[] }) {
-  const [activeId, setActiveId] = useState(notes[0]?.id ?? "");
-  const active = notes.find((note) => note.id === activeId) ?? notes[0];
+function InlineTaskForm() {
+  return (
+    <CaptureForm action={createTask} icon={<CalendarClock size={16} />} title="Task">
+      <TextInput name="title" placeholder="Ask teacher for recommendation" required />
+      <TextInput name="due_date" type="date" />
+      <Submit>Add task</Submit>
+    </CaptureForm>
+  );
+}
+
+function DocumentForm() {
+  return (
+    <CaptureForm action={uploadDocument} icon={<FileUp size={16} />} title="Document">
+      <input
+        className="min-h-11 rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2 text-sm outline-none focus:border-[color:var(--almanac-olive)]"
+        name="file"
+        required
+        type="file"
+      />
+      <Submit>Upload</Submit>
+    </CaptureForm>
+  );
+}
+
+function ActionPlanView() {
+  const [window, setWindow] = useState<"weekly" | "monthly">("weekly");
+
+  const planByWindow = {
+    weekly: {
+      kicker: "Weekly plan",
+      title: "This week",
+      summary:
+        "Keep the next seven days focused on immediate conversations, deadlines, and evidence to collect.",
+      items: [
+        { label: "Priority", value: "Turn one strong story into a usable application draft." },
+        { label: "Actions", value: "Talk through evidence, capture notes, and identify any gaps." },
+        { label: "Check-in", value: "Review what was captured and confirm the next step." },
+      ],
+    },
+    monthly: {
+      kicker: "Monthly plan",
+      title: "This month",
+      summary:
+        "Use the month view to keep longer goals, application progress, and reflection aligned.",
+      items: [
+        { label: "Priority", value: "Build a fuller picture of strengths, interests, and direction." },
+        { label: "Actions", value: "Revisit sessions, refine stories, and organize follow-up tasks." },
+        { label: "Check-in", value: "Assess what is ready, what needs work, and what to do next." },
+      ],
+    },
+  }[window];
 
   return (
     <Scrollable>
       <PageHeader
-        action={<AddButton label="New entry" tone="ink" />}
-        eyebrow={`Journal · ${notes.length} entries`}
-        subtitle="Counsellor sessions, reflections, and research notes become essay seeds here."
+        eyebrow="Planning"
+        subtitle="A lightweight planning surface for now. Weekly and monthly views keep the workflow visible while generation stays manual."
         title={
           <>
-            Your{" "}
-            <em className="font-serif italic text-[color:var(--almanac-butter)]">
-              notes
-            </em>
+            Action{" "}
+            <em className="font-serif italic text-[color:var(--almanac-sage)]">plan</em>
           </>
         }
       />
-      <div className="grid gap-5 px-5 py-6 md:px-9 xl:grid-cols-[22rem_1fr]">
-        <InlineNoteForm />
-        <div className="grid gap-3 xl:col-start-1">
-          {notes.map((note) => {
-            const activeNote = note.id === active?.id;
-            return (
-              <button
-                className={[
-                  "rounded-xl border p-4 text-left transition",
-                  activeNote
-                    ? "border-[color:var(--almanac-ink)] bg-[color:var(--almanac-paper-deep)]"
-                    : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:bg-[color:var(--almanac-paper-deep)]",
-                ].join(" ")}
-                key={note.id}
-                onClick={() => setActiveId(note.id)}
-                type="button"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-                    {note.category}
-                  </span>
-                  <span className="font-serif italic text-[color:var(--almanac-ink-soft)]">
-                    {shortDate(note.created_at)}
-                  </span>
-                </div>
-                <p className="mt-2 font-serif text-xl leading-tight">{note.title}</p>
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-                  {note.body}
-                </p>
-              </button>
-            );
-          })}
-          {!notes.length ? <Empty label="No notes yet." /> : null}
+      <div className="px-5 py-6 md:px-9">
+        <div className="inline-flex rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-1">
+          {(["weekly", "monthly"] as const).map((item) => (
+            <button
+              className={[
+                "rounded-full px-4 py-2 text-sm font-medium transition",
+                window === item
+                  ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
+                  : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
+              ].join(" ")}
+              key={item}
+              onClick={() => setWindow(item)}
+              type="button"
+            >
+              {item === "weekly" ? "Weekly" : "Monthly"}
+            </button>
+          ))}
         </div>
-        <article className="min-h-96 rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-6 md:p-8 xl:row-span-2 xl:row-start-1">
-          {active ? (
-            <>
-              <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-                {active.category} · {shortDate(active.created_at)}
-              </p>
-              <h2 className="mt-3 font-serif text-4xl leading-tight">
-                {active.title}
-              </h2>
-              <p className="mt-6 whitespace-pre-wrap text-[0.96rem] leading-8">
-                {active.body}
-              </p>
-            </>
-          ) : (
-            <Empty label="Select or add a note." />
-          )}
-        </article>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
+          <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
+            <SectionKicker>{planByWindow.kicker}</SectionKicker>
+            <h2 className="mt-2 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)]">
+              {planByWindow.title}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+              {planByWindow.summary}
+            </p>
+            <div className="mt-5 grid gap-3">
+              {planByWindow.items.map((item) => (
+                <article
+                  className="rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4"
+                  key={item.label}
+                >
+                  <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink)]">
+                    {item.value}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <aside className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
+            <SectionKicker>What this is for</SectionKicker>
+            <div className="mt-4 grid gap-3">
+              <Empty
+                label={
+                  window === "weekly"
+                    ? "Weekly plans keep the next conversation and the next deadline in view."
+                    : "Monthly plans keep the bigger arc visible without cluttering the workspace."
+                }
+              />
+              <div className="rounded-xl border border-dashed border-[color:var(--almanac-rule)] px-4 py-5 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+                Later this can be generated from the student profile, saved sessions, and memory.
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </Scrollable>
   );
@@ -898,18 +1078,6 @@ function TimelineView({
   );
 }
 
-function InlineNoteForm() {
-  return (
-    <CaptureForm action={createNote} icon={<PenLine size={16} />} title="Reflection note">
-      <TextInput name="title" placeholder="Title" required />
-      <TextInput defaultValue="Reflection" name="category" placeholder="Category" required />
-      <TextArea name="body" placeholder="What happened, why it mattered, what you learned..." required />
-      <Submit>Add note</Submit>
-    </CaptureForm>
-  );
-}
-
-
 function InlineActivityForm() {
   return (
     <CaptureForm action={createActivity} icon={<Leaf size={16} />} title="Activity">
@@ -923,8 +1091,6 @@ function InlineActivityForm() {
     </CaptureForm>
   );
 }
-
-
 
 function CaptureForm({
   action,
@@ -1028,40 +1194,22 @@ function TaskRow({ task }: { task: StudentTask }) {
   );
 }
 
-function VoiceOverlay({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)]">
-      <div className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-5 py-4 md:px-8">
-        <div className="flex items-center gap-3">
-          <span className="size-2.5 animate-pulse rounded-full bg-[color:var(--almanac-clay)]" />
-          <div>
-            <p className="font-serif text-2xl italic">voice mode</p>
-            <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-              conversation with your counsellor
-            </p>
-          </div>
-        </div>
-        <button
-          className="rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-sm"
-          onClick={onClose}
-          type="button"
-        >
-          End session
-        </button>
-      </div>
-      <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-5 py-8">
-        <VoicePanel variant="almanac" />
-      </div>
-    </div>
-  );
-}
-
 function MobileBar({
-  onVoice,
+  customName,
+  navLayout,
+  prefsOpen,
+  setCustomName,
+  setNavLayout,
+  setPrefsOpen,
   setTab,
   tab,
 }: {
-  onVoice: () => void;
+  customName: string;
+  navLayout: "left" | "top";
+  prefsOpen: boolean;
+  setCustomName: (v: string) => void;
+  setNavLayout: (v: "left" | "top") => void;
+  setPrefsOpen: (fn: (v: boolean) => boolean) => void;
   setTab: (tab: Tab) => void;
   tab: Tab;
 }) {
@@ -1069,13 +1217,34 @@ function MobileBar({
     <header className="border-b border-[color:var(--almanac-rule)] px-5 py-4 lg:hidden">
       <div className="flex items-center justify-between gap-4">
         <Brand />
-        <button
-          className="flex size-10 items-center justify-center rounded-full bg-[color:var(--almanac-clay)] text-[color:var(--almanac-paper)]"
-          onClick={onVoice}
-          type="button"
-        >
-          <Mic size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              aria-label="Settings"
+              className="flex size-10 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] text-[color:var(--almanac-ink)]"
+              onClick={() => setPrefsOpen((v) => !v)}
+              type="button"
+            >
+              <Settings size={18} />
+            </button>
+            <PrefsPopup
+              customName={customName}
+              direction="down"
+              navLayout={navLayout}
+              open={prefsOpen}
+              setCustomName={setCustomName}
+              setNavLayout={setNavLayout}
+            />
+          </div>
+          <form action={signOut}>
+            <button
+              aria-label="Sign out"
+              className="flex size-10 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] text-[color:var(--almanac-ink)]"
+            >
+              <LogOut size={18} />
+            </button>
+          </form>
+        </div>
       </div>
       <nav className="mt-4 flex gap-2 overflow-x-auto pb-1">
         {nav.map((item) => {
@@ -1133,13 +1302,13 @@ function PageHeader({
   );
 }
 
-function Brand() {
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex size-9 items-center justify-center rounded-full bg-[color:var(--almanac-ink)] font-serif text-xl italic text-[color:var(--almanac-paper)]">
+    <div className={["flex items-center", compact ? "justify-center" : "gap-3"].join(" ")}>
+      <span className="flex size-11 items-center justify-center rounded-full bg-[color:var(--almanac-ink)] font-serif text-2xl italic leading-none text-[color:var(--almanac-paper)]">
         c
       </span>
-      <p className="font-serif text-2xl italic">cultvr</p>
+      {compact ? null : <p className="font-serif text-[2.15rem] italic leading-none">cultvr</p>}
     </div>
   );
 }
@@ -1188,7 +1357,11 @@ function SectionKicker({ children }: { children: React.ReactNode }) {
 }
 
 function Scrollable({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>;
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+      {children}
+    </div>
+  );
 }
 
 function Empty({ label }: { label: string }) {

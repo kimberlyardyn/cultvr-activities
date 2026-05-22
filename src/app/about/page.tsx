@@ -18,7 +18,7 @@ const principles = [
 export default function AboutPage() {
   return (
     <main
-      className="min-h-screen bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
+      className="min-h-[100dvh] overflow-x-hidden bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
       style={{
         backgroundImage:
           "radial-gradient(rgba(31,36,51,0.18) 0.6px, transparent 0.6px), radial-gradient(rgba(31,36,51,0.18) 0.5px, transparent 0.5px)",
@@ -33,7 +33,7 @@ export default function AboutPage() {
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             About Cultivr
           </p>
-          <h1 className="mt-5 max-w-xl font-serif text-5xl leading-none text-[#1F2433] md:text-6xl">
+          <h1 className="mt-5 max-w-xl font-serif text-4xl leading-none text-[#1F2433] sm:text-5xl md:text-6xl">
             A calmer way to organize the college process.
           </h1>
         </div>

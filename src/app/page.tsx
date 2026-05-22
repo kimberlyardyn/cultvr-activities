@@ -7,7 +7,7 @@ import { PublicNav } from "@/components/public-nav";
 export default function Home() {
   return (
     <main
-      className="grid min-h-screen overflow-hidden bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
+      className="grid min-h-[100dvh] overflow-x-hidden bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
       style={{
         backgroundImage:
           "radial-gradient(rgba(31,36,51,0.18) 0.6px, transparent 0.6px), radial-gradient(rgba(31,36,51,0.18) 0.5px, transparent 0.5px)",
@@ -18,13 +18,13 @@ export default function Home() {
     >
       <PublicNav />
 
-      <section className="mx-auto grid w-full max-w-7xl items-center gap-8 py-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:px-5 md:py-0">
+      <section className="mx-auto grid w-full max-w-7xl items-center gap-8 py-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:px-5 md:py-8">
         <div className="max-w-xl">
           <p className="inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             <span className="size-1.5 animate-pulse rounded-full bg-[#C97A5D]" />
             College counseling workspace
           </p>
-          <h1 className="mt-6 font-serif text-6xl leading-none text-[#1F2433] md:text-7xl lg:text-8xl">
+          <h1 className="mt-6 font-serif text-5xl leading-none text-[#1F2433] sm:text-6xl md:text-7xl lg:text-8xl">
             Clear planning.
             <br />
             Stronger{" "}
@@ -52,7 +52,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="relative mx-auto flex aspect-square w-full max-w-[31rem] items-center justify-center">
+        <div className="relative mx-auto flex aspect-square w-full max-w-[24rem] items-center justify-center md:max-w-[31rem]">
           <div className="absolute inset-[8%] rounded-full border border-dashed border-[#1F2433]/20" />
           <div className="absolute inset-[22%] rounded-full bg-[#DFD7CF]/60" />
           <LandingPlant />

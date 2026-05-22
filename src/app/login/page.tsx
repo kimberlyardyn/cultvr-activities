@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main
-      className="min-h-screen bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
+      className="min-h-[100dvh] overflow-x-hidden bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
       style={{
         backgroundImage:
           "radial-gradient(rgba(31,36,51,0.18) 0.6px, transparent 0.6px), radial-gradient(rgba(31,36,51,0.18) 0.5px, transparent 0.5px)",
@@ -24,12 +24,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     >
       <PublicNav />
 
-      <section className="mx-auto grid min-h-[calc(100vh-7rem)] w-full max-w-6xl items-center gap-8 py-10 lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="mx-auto grid min-h-[calc(100dvh-7rem)] w-full max-w-6xl items-start gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:py-10">
         <div className="flex flex-col justify-center">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             Secure student workspace
           </p>
-          <h1 className="mt-5 max-w-xl font-serif text-5xl leading-none tracking-tight text-[#1F2433]">
+          <h1 className="mt-5 max-w-xl font-serif text-4xl leading-none tracking-tight text-[#1F2433] sm:text-5xl">
             Continue your college planning.
           </h1>
           <p className="mt-4 max-w-lg text-base leading-7 text-[#1F2433]/65">
@@ -111,7 +111,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             className="rounded-2xl border border-[#1F2433]/10 bg-[#F6F0E8]/90 p-6 shadow-sm"
           >
             <h2 className="font-serif text-2xl text-[#1F2433]">Magic link</h2>
-            <div className="mt-5 flex gap-3">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <input
                 className="h-11 min-w-0 flex-1 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
                 name="email"
@@ -119,7 +119,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 required
                 type="email"
               />
-              <button className="h-11 rounded-full bg-[#1F2433] px-5 font-medium text-[#ECE6E0] hover:bg-[#0F1322]">
+              <button className="h-11 rounded-full bg-[#1F2433] px-5 font-medium text-[#ECE6E0] hover:bg-[#0F1322] sm:w-auto">
                 Send
               </button>
             </div>

@@ -69,6 +69,63 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.guided_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  session_type text not null,
+  session_label text not null,
+  focus text,
+  interaction_mode text not null default 'voice'
+    check (interaction_mode in ('voice', 'chat', 'mixed')),
+  status text not null default 'completed'
+    check (status in ('active', 'reviewed', 'completed', 'abandoned')),
+  transcript text,
+  summary text,
+  prompt_count integer not null default 0,
+  answered_count integer not null default 0,
+  note_id uuid references public.notes(id) on delete set null,
+  goal_id uuid references public.goals(id) on delete set null,
+  task_id uuid references public.tasks(id) on delete set null,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.guided_session_answers (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.guided_sessions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  prompt_index integer not null,
+  prompt text not null,
+  answer text,
+  source text not null default 'chat'
+    check (source in ('voice', 'chat', 'manual')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (session_id, prompt_index)
+);
+
+create table if not exists public.guided_session_turns (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.guided_sessions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  role text not null check (role in ('student', 'assistant', 'system')),
+  modality text not null check (modality in ('voice', 'chat')),
+  content text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists guided_sessions_user_created_idx
+on public.guided_sessions (user_id, created_at desc);
+
+create index if not exists guided_session_answers_session_idx
+on public.guided_session_answers (session_id, prompt_index);
+
+create index if not exists guided_session_turns_session_idx
+on public.guided_session_turns (session_id, occurred_at);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -94,6 +151,9 @@ alter table public.tasks enable row level security;
 alter table public.activities enable row level security;
 alter table public.awards enable row level security;
 alter table public.documents enable row level security;
+alter table public.guided_sessions enable row level security;
+alter table public.guided_session_answers enable row level security;
+alter table public.guided_session_turns enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -141,6 +201,40 @@ create policy "documents_all_own"
 on public.documents for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+drop policy if exists "guided_sessions_all_own" on public.guided_sessions;
+create policy "guided_sessions_all_own"
+on public.guided_sessions for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "guided_session_answers_all_own" on public.guided_session_answers;
+create policy "guided_session_answers_all_own"
+on public.guided_session_answers for all
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.guided_sessions
+    where guided_sessions.id = guided_session_answers.session_id
+      and guided_sessions.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "guided_session_turns_all_own" on public.guided_session_turns;
+create policy "guided_session_turns_all_own"
+on public.guided_session_turns for all
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.guided_sessions
+    where guided_sessions.id = guided_session_turns.session_id
+      and guided_sessions.user_id = auth.uid()
+  )
+);
 
 insert into storage.buckets (id, name, public)
 values ('student_uploads', 'student_uploads', false)

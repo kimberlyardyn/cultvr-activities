@@ -22,6 +22,26 @@ const taskSchema = z.object({
   due_date: z.string().optional(),
 });
 
+const guidedSessionSchema = z.object({
+  session_type: z.string().min(2).max(80),
+  session_label: z.string().min(2).max(120),
+  session_focus: z.string().max(240).optional(),
+  interaction_mode: z.enum(["voice", "chat", "mixed"]),
+  transcript: z.string().max(20000).optional(),
+  prompt_answers: z.string().optional(),
+  note_title: z.string().min(2).max(120),
+  note_body: z.string().min(2).max(6000),
+});
+
+const guidedPromptAnswerSchema = z.array(
+  z.object({
+    prompt_index: z.number().int().min(0),
+    prompt: z.string().min(1).max(1000),
+    answer: z.string().max(10000).optional(),
+    source: z.enum(["voice", "chat", "manual"]).optional(),
+  }),
+);
+
 const activitySchema = z.object({
   name: z.string().min(2).max(160),
   role: z.string().max(160).optional(),
@@ -48,6 +68,16 @@ async function requireUser() {
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function parsePromptAnswers(raw: string | undefined) {
+  if (!raw) return [];
+
+  try {
+    return guidedPromptAnswerSchema.parse(JSON.parse(raw));
+  } catch {
+    return [];
+  }
 }
 
 export async function createNote(formData: FormData) {
@@ -81,6 +111,83 @@ export async function createTask(formData: FormData) {
   });
 
   await supabase.from("tasks").insert({ ...parsed, user_id: user.id });
+  revalidatePath("/dashboard");
+}
+
+export async function createGuidedSessionArtifacts(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const parsed = guidedSessionSchema.parse({
+    session_type: value(formData, "session_type"),
+    session_label: value(formData, "session_label"),
+    session_focus: value(formData, "session_focus") || undefined,
+    interaction_mode: value(formData, "interaction_mode") || "voice",
+    transcript: value(formData, "transcript") || undefined,
+    prompt_answers: value(formData, "prompt_answers"),
+    note_title: value(formData, "note_title"),
+    note_body: value(formData, "note_body"),
+  });
+  const promptAnswers = parsePromptAnswers(parsed.prompt_answers);
+  const answeredCount = promptAnswers.filter((item) => item.answer?.trim()).length;
+
+  const noteResult = await supabase
+    .from("notes")
+    .insert({
+      user_id: user.id,
+      title: parsed.note_title,
+      body: parsed.note_body,
+      category: `Guided: ${parsed.session_type}`.slice(0, 40),
+    })
+    .select("id")
+    .single();
+
+  if (noteResult.error) throw noteResult.error;
+
+  const sessionResult = await supabase
+    .from("guided_sessions")
+    .insert({
+      user_id: user.id,
+      session_type: parsed.session_type,
+      session_label: parsed.session_label,
+      focus: parsed.session_focus || null,
+      interaction_mode: parsed.interaction_mode,
+      status: "completed",
+      transcript: parsed.transcript || null,
+      summary: parsed.note_body,
+      prompt_count: promptAnswers.length,
+      answered_count: answeredCount,
+      note_id: noteResult.data.id,
+      completed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (sessionResult.error) throw sessionResult.error;
+
+  if (promptAnswers.length) {
+    const answerRows = promptAnswers.map((item) => ({
+      session_id: sessionResult.data.id,
+      user_id: user.id,
+      prompt_index: item.prompt_index,
+      prompt: item.prompt,
+      answer: item.answer?.trim() || null,
+      source: item.source ?? (parsed.interaction_mode === "voice" ? "voice" : "chat"),
+    }));
+    const { error } = await supabase.from("guided_session_answers").insert(answerRows);
+    if (error) throw error;
+  }
+
+  if (parsed.transcript?.trim()) {
+    const { error } = await supabase.from("guided_session_turns").insert({
+      session_id: sessionResult.data.id,
+      user_id: user.id,
+      role: "student",
+      modality: parsed.interaction_mode === "chat" ? "chat" : "voice",
+      content: parsed.transcript,
+      metadata: { source: "session_transcript" },
+    });
+    if (error) throw error;
+  }
+
   revalidatePath("/dashboard");
 }
 

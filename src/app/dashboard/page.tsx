@@ -6,7 +6,21 @@ import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { Activity, Award, Goal, Note, StudentTask } from "@/lib/types";
 
-export default async function DashboardPage() {
+const dashboardTabs = new Set([
+  "overview",
+  "sessions",
+  "action-plan",
+  "activities",
+  "goals",
+  "timeline",
+  "discover",
+]);
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   if (!hasSupabaseEnv()) {
     return <MissingConfig />;
   }
@@ -17,6 +31,8 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+  const { tab } = await searchParams;
+  const initialTab = dashboardTabs.has(tab ?? "") ? tab : undefined;
 
   const [notes, goals, tasks, activities, awards] = await Promise.all([
     supabase
@@ -54,6 +70,7 @@ export default async function DashboardPage() {
       notes={(notes.data ?? []) as Note[]}
       tasks={(tasks.data ?? []) as StudentTask[]}
       userEmail={user.email ?? null}
+      initialTab={initialTab}
     />
   );
 }
