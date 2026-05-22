@@ -39,6 +39,28 @@ export type Award = {
   created_at: string;
 };
 
+export type CollegeListEntry = {
+  id: string;
+  name: string;
+  location: string | null;
+  fit_reason: string | null;
+  status: string;
+  priority: string;
+  notes: string | null;
+  source: string;
+  last_mentioned_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProfilePreferences = {
+  display_name: string | null;
+  full_name: string | null;
+  nav_layout: "left" | "top";
+  nav_collapsed: boolean;
+  top_nav_collapsed: boolean;
+};
+
 export type GuidedSession = {
   id: string;
   session_type: string;

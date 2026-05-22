@@ -4,7 +4,16 @@ import { redirect } from "next/navigation";
 import { AlmanacWorkspace } from "@/components/almanac-workspace";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import type { Activity, Award, Goal, Note, StudentTask } from "@/lib/types";
+import type {
+  Activity,
+  Award,
+  CollegeListEntry,
+  Goal,
+  GuidedSession,
+  Note,
+  ProfilePreferences,
+  StudentTask,
+} from "@/lib/types";
 
 const dashboardTabs = new Set([
   "overview",
@@ -34,7 +43,12 @@ export default async function DashboardPage({
   const { tab } = await searchParams;
   const initialTab = dashboardTabs.has(tab ?? "") ? tab : undefined;
 
-  const [notes, goals, tasks, activities, awards] = await Promise.all([
+  const [profile, notes, goals, tasks, activities, awards, collegeList, guidedSessions] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name,display_name,nav_layout,nav_collapsed,top_nav_collapsed")
+      .eq("id", user.id)
+      .maybeSingle(),
     supabase
       .from("notes")
       .select("id,title,body,category,created_at")
@@ -60,14 +74,31 @@ export default async function DashboardPage({
       .select("id,name,scope,year,created_at")
       .order("created_at", { ascending: false })
       .limit(12),
+    supabase
+      .from("college_list")
+      .select(
+        "id,name,location,fit_reason,status,priority,notes,source,last_mentioned_at,created_at,updated_at",
+      )
+      .order("updated_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("guided_sessions")
+      .select(
+        "id,session_type,session_label,focus,interaction_mode,status,transcript,summary,prompt_count,answered_count,note_id,goal_id,task_id,started_at,completed_at,created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(4),
   ]);
 
   return (
     <AlmanacWorkspace
       activities={(activities.data ?? []) as Activity[]}
       awards={(awards.data ?? []) as Award[]}
+      collegeList={(collegeList.data ?? []) as CollegeListEntry[]}
       goals={(goals.data ?? []) as Goal[]}
+      guidedSessions={(guidedSessions.data ?? []) as GuidedSession[]}
       notes={(notes.data ?? []) as Note[]}
+      profile={(profile.data ?? null) as ProfilePreferences | null}
       tasks={(tasks.data ?? []) as StudentTask[]}
       userEmail={user.email ?? null}
       initialTab={initialTab}

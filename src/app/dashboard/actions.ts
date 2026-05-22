@@ -55,6 +55,28 @@ const awardSchema = z.object({
   year: z.string().max(20).optional(),
 });
 
+const collegeListSchema = z.object({
+  name: z.string().min(2).max(160),
+  location: z.string().max(120).optional(),
+  fit_reason: z.string().max(500).optional(),
+  status: z
+    .enum(["Interested", "Researching", "Likely", "Target", "Reach", "Applying", "Archived"])
+    .optional(),
+  priority: z.enum(["High", "Medium", "Low"]).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+const updateCollegeListSchema = collegeListSchema.extend({
+  id: z.uuid(),
+});
+
+const profilePreferencesSchema = z.object({
+  displayName: z.string().max(80).optional(),
+  navLayout: z.enum(["left", "top"]).optional(),
+  navCollapsed: z.boolean().optional(),
+  topNavCollapsed: z.boolean().optional(),
+});
+
 async function requireUser() {
   const supabase = await createClient();
   const {
@@ -216,12 +238,78 @@ export async function createAward(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+export async function createCollegeListEntry(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const parsed = collegeListSchema.parse({
+    name: value(formData, "name"),
+    location: value(formData, "location") || null,
+    fit_reason: value(formData, "fit_reason") || null,
+    status: value(formData, "status") || "Interested",
+    priority: value(formData, "priority") || "Medium",
+    notes: value(formData, "notes") || null,
+  });
+
+  await supabase.from("college_list").insert({
+    ...parsed,
+    user_id: user.id,
+    source: "manual",
+    last_mentioned_at: new Date().toISOString(),
+  });
+  revalidatePath("/dashboard");
+}
+
+export async function updateCollegeListEntry(formData: FormData) {
+  const { supabase } = await requireUser();
+  const parsed = updateCollegeListSchema.parse({
+    id: value(formData, "id"),
+    name: value(formData, "name"),
+    location: value(formData, "location") || null,
+    fit_reason: value(formData, "fit_reason") || null,
+    status: value(formData, "status") || "Interested",
+    priority: value(formData, "priority") || "Medium",
+    notes: value(formData, "notes") || null,
+  });
+  const { id, ...updates } = parsed;
+
+  await supabase
+    .from("college_list")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  revalidatePath("/dashboard");
+}
+
 export async function toggleTask(formData: FormData) {
   const { supabase } = await requireUser();
   const id = value(formData, "id");
   const status = value(formData, "status") === "done" ? "todo" : "done";
 
   await supabase.from("tasks").update({ status }).eq("id", id);
+  revalidatePath("/dashboard");
+}
+
+export async function updateProfilePreferences(input: z.input<typeof profilePreferencesSchema>) {
+  const { supabase, user } = await requireUser();
+  const parsed = profilePreferencesSchema.parse(input);
+  const updates: Record<string, string | boolean> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if ("displayName" in parsed) updates.display_name = parsed.displayName?.trim() ?? "";
+  if (parsed.navLayout) updates.nav_layout = parsed.navLayout;
+  if (typeof parsed.navCollapsed === "boolean") updates.nav_collapsed = parsed.navCollapsed;
+  if (typeof parsed.topNavCollapsed === "boolean") {
+    updates.top_nav_collapsed = parsed.topNavCollapsed;
+  }
+
+  const { error } = await supabase.from("profiles").upsert({
+    id: user.id,
+    ...updates,
+  });
+
+  if (error) throw error;
   revalidatePath("/dashboard");
 }
 

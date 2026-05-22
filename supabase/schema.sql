@@ -3,10 +3,27 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
+  display_name text,
   student_year text,
+  nav_layout text not null default 'left'
+    check (nav_layout in ('left', 'top')),
+  nav_collapsed boolean not null default false,
+  top_nav_collapsed boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists display_name text;
+
+alter table public.profiles
+  add column if not exists nav_layout text not null default 'left';
+
+alter table public.profiles
+  add column if not exists nav_collapsed boolean not null default false;
+
+alter table public.profiles
+  add column if not exists top_nav_collapsed boolean not null default false;
 
 create table if not exists public.notes (
   id uuid primary key default gen_random_uuid(),
@@ -55,6 +72,24 @@ create table if not exists public.awards (
   name text not null,
   scope text,
   year text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.college_list (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  name text not null,
+  location text,
+  fit_reason text,
+  status text not null default 'Interested'
+    check (status in ('Interested', 'Researching', 'Likely', 'Target', 'Reach', 'Applying', 'Archived')),
+  priority text not null default 'Medium'
+    check (priority in ('High', 'Medium', 'Low')),
+  notes text,
+  source text not null default 'manual'
+    check (source in ('manual', 'conversation', 'imported')),
+  last_mentioned_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -126,6 +161,9 @@ on public.guided_session_answers (session_id, prompt_index);
 create index if not exists guided_session_turns_session_idx
 on public.guided_session_turns (session_id, occurred_at);
 
+create index if not exists college_list_user_updated_idx
+on public.college_list (user_id, updated_at desc);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -150,6 +188,7 @@ alter table public.goals enable row level security;
 alter table public.tasks enable row level security;
 alter table public.activities enable row level security;
 alter table public.awards enable row level security;
+alter table public.college_list enable row level security;
 alter table public.documents enable row level security;
 alter table public.guided_sessions enable row level security;
 alter table public.guided_session_answers enable row level security;
@@ -159,6 +198,11 @@ drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
 on public.profiles for select
 using (auth.uid() = id);
+
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
+on public.profiles for insert
+with check (auth.uid() = id);
 
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own"
@@ -193,6 +237,12 @@ with check (auth.uid() = user_id);
 drop policy if exists "awards_all_own" on public.awards;
 create policy "awards_all_own"
 on public.awards for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "college_list_all_own" on public.college_list;
+create policy "college_list_all_own"
+on public.college_list for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 

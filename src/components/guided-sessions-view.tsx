@@ -188,7 +188,6 @@ export function GuidedSessionsView({ notes }: { notes: Note[] }) {
   return (
     <Scrollable>
       <PageHeader
-        subtitle="Pick a session and keep the conversation moving. Switch to chat only when you want the prompts on screen."
         title={
           <>
             Guided{" "}
@@ -551,11 +550,9 @@ function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 
 function PageHeader({
   eyebrow,
-  subtitle,
   title,
 }: {
   eyebrow?: string;
-  subtitle: string;
   title: ReactNode;
 }) {
   return (
@@ -569,9 +566,6 @@ function PageHeader({
         <h1 className="mt-2 font-serif text-4xl leading-[1.02] text-[color:var(--almanac-ink)] md:text-5xl">
           {title}
         </h1>
-        <p className="mt-3 max-w-3xl text-[0.97rem] leading-7 text-[color:var(--almanac-ink-soft)]">
-          {subtitle}
-        </p>
       </div>
     </header>
   );

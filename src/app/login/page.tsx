@@ -1,8 +1,4 @@
-import {
-  signInWithMagicLink,
-  signInWithPassword,
-  signUpWithPassword,
-} from "@/app/login/actions";
+import { LoginAuthCard } from "@/components/login-auth-card";
 import { PublicNav } from "@/components/public-nav";
 
 type LoginPageProps = {
@@ -24,7 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     >
       <PublicNav />
 
-      <section className="mx-auto grid min-h-[calc(100dvh-7rem)] w-full max-w-6xl items-start gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:py-10">
+      <section className="mx-auto grid min-h-[calc(100dvh-7rem)] w-full max-w-6xl items-start gap-8 py-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-10">
         <div className="flex flex-col justify-center">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             Secure student workspace
@@ -36,95 +32,23 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Sign in to review notes, organize activities and awards, prepare
             essay work, and keep next steps clear.
           </p>
+          <div className="mt-8 grid max-w-md grid-cols-3 gap-3 text-sm text-[#1F2433]/62">
+            <div className="border-l border-[#1F2433]/14 pl-3">
+              <p className="font-serif text-xl text-[#1F2433]">Voice</p>
+              <p className="mt-1">Resume reflections</p>
+            </div>
+            <div className="border-l border-[#1F2433]/14 pl-3">
+              <p className="font-serif text-xl text-[#1F2433]">Plan</p>
+              <p className="mt-1">Track next steps</p>
+            </div>
+            <div className="border-l border-[#1F2433]/14 pl-3">
+              <p className="font-serif text-xl text-[#1F2433]">Story</p>
+              <p className="mt-1">Shape material</p>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-4">
-          {message ? (
-            <div className="rounded-md border border-[#cdd8c9] bg-white/80 px-4 py-3 text-sm text-[#355c46]">
-              {message}
-            </div>
-          ) : null}
-
-          <form
-            action={signInWithPassword}
-            className="rounded-2xl border border-[#1F2433]/10 bg-[#F6F0E8]/90 p-6 shadow-sm"
-          >
-            <h2 className="font-serif text-2xl text-[#1F2433]">Sign in</h2>
-            <div className="mt-5 grid gap-3">
-              <input
-                className="h-11 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                name="email"
-                placeholder="Email"
-                required
-                type="email"
-              />
-              <input
-                className="h-11 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                name="password"
-                placeholder="Password"
-                required
-                type="password"
-              />
-            </div>
-            <button className="mt-4 h-11 w-full rounded-full bg-[#1F2433] px-4 font-medium text-[#ECE6E0] hover:bg-[#0F1322]">
-              Sign in
-            </button>
-          </form>
-
-          <form
-            action={signUpWithPassword}
-            className="rounded-2xl border border-[#1F2433]/10 bg-[#F6F0E8]/90 p-6 shadow-sm"
-          >
-            <h2 className="font-serif text-2xl text-[#1F2433]">
-              Create account
-            </h2>
-            <div className="mt-5 grid gap-3">
-              <input
-                className="h-11 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                name="fullName"
-                placeholder="Student name"
-                required
-              />
-              <input
-                className="h-11 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                name="email"
-                placeholder="Email"
-                required
-                type="email"
-              />
-              <input
-                className="h-11 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                minLength={8}
-                name="password"
-                placeholder="Password"
-                required
-                type="password"
-              />
-            </div>
-            <button className="mt-4 h-11 w-full rounded-full border border-[#3F4A66] px-4 font-medium text-[#3F4A66] hover:bg-[#3F4A66]/5">
-              Create account
-            </button>
-          </form>
-
-          <form
-            action={signInWithMagicLink}
-            className="rounded-2xl border border-[#1F2433]/10 bg-[#F6F0E8]/90 p-6 shadow-sm"
-          >
-            <h2 className="font-serif text-2xl text-[#1F2433]">Magic link</h2>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <input
-                className="h-11 min-w-0 flex-1 rounded-lg border border-[#1F2433]/15 bg-white/70 px-3 outline-none focus:border-[#3F4A66]"
-                name="email"
-                placeholder="Email"
-                required
-                type="email"
-              />
-              <button className="h-11 rounded-full bg-[#1F2433] px-5 font-medium text-[#ECE6E0] hover:bg-[#0F1322] sm:w-auto">
-                Send
-              </button>
-            </div>
-          </form>
-        </div>
+        <LoginAuthCard message={message} />
       </section>
     </main>
   );

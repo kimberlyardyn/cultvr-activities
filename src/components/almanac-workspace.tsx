@@ -4,7 +4,6 @@ import {
   BookOpen,
   CalendarClock,
   Compass,
-  FileUp,
   Leaf,
   LogOut,
   NotebookPen,
@@ -15,21 +14,24 @@ import {
   Plus,
   ListTodo,
   Settings,
-  Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { signOut } from "@/app/actions";
-import {
-  createActivity,
-  createGoal,
-  createTask,
-  uploadDocument,
-} from "@/app/dashboard/actions";
-import { ChatPanel } from "@/components/chat-panel";
+import { createActivity, updateProfilePreferences } from "@/app/dashboard/actions";
+import { DashboardView } from "@/components/dashboard-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
-import type { Activity, Award, Goal, Note, StudentTask } from "@/lib/types";
+import type {
+  Activity,
+  Award,
+  CollegeListEntry,
+  Goal,
+  GuidedSession,
+  Note,
+  ProfilePreferences,
+  StudentTask,
+} from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 type Tab =
@@ -45,9 +47,12 @@ type AlmanacWorkspaceProps = {
   userEmail: string | null;
   notes: Note[];
   goals: Goal[];
+  guidedSessions: GuidedSession[];
   tasks: StudentTask[];
   activities: Activity[];
   awards: Award[];
+  collegeList: CollegeListEntry[];
+  profile: ProfilePreferences | null;
   initialTab?: string;
 };
 
@@ -76,9 +81,12 @@ export function AlmanacWorkspace({
   userEmail,
   notes,
   goals,
+  guidedSessions,
   tasks,
   activities,
   awards,
+  collegeList,
+  profile,
   initialTab,
 }: AlmanacWorkspaceProps) {
   const router = useRouter();
@@ -96,36 +104,53 @@ export function AlmanacWorkspace({
       : "overview",
   );
   const [prefsOpen, setPrefsOpen] = useState(false);
-  const [navLayout, setNavLayoutState] = useState<"left" | "top">("left");
-  const [navCollapsed, setNavCollapsedState] = useState(false);
-  const [topNavCollapsed, setTopNavCollapsedState] = useState(false);
-  const [customName, setCustomName] = useState("");
+  const [navLayout, setNavLayoutState] = useState<"left" | "top">(
+    profile?.nav_layout === "top" ? "top" : "left",
+  );
+  const [navCollapsed, setNavCollapsedState] = useState(Boolean(profile?.nav_collapsed));
+  const [topNavCollapsed, setTopNavCollapsedState] = useState(Boolean(profile?.top_nav_collapsed));
+  const [customName, setCustomNameState] = useState(
+    profile?.display_name?.trim() || profile?.full_name?.trim() || "",
+  );
 
   useEffect(() => {
+    if (profile) return;
     const saved = localStorage.getItem("cultvr-nav-layout");
     const savedCollapsed = localStorage.getItem("cultvr-nav-collapsed");
     const savedTopCollapsed = localStorage.getItem("cultvr-top-nav-collapsed");
     if (saved === "left" || saved === "top") setNavLayoutState(saved); // eslint-disable-line react-hooks/set-state-in-effect
     if (savedCollapsed === "true") setNavCollapsedState(true);
     if (savedTopCollapsed === "true") setTopNavCollapsedState(true);
-  }, []);
+  }, [profile]);
+
+  function persistProfilePreferences(input: Parameters<typeof updateProfilePreferences>[0]) {
+    void updateProfilePreferences(input).catch(() => undefined);
+  }
 
   const setNavLayout = (v: "left" | "top") => {
     setNavLayoutState(v);
     localStorage.setItem("cultvr-nav-layout", v);
+    persistProfilePreferences({ navLayout: v });
     setPrefsOpen(false);
   };
 
   const setNavCollapsed = (value: boolean) => {
     setNavCollapsedState(value);
     localStorage.setItem("cultvr-nav-collapsed", String(value));
+    persistProfilePreferences({ navCollapsed: value });
     setPrefsOpen(false);
   };
 
   const setTopNavCollapsed = (value: boolean) => {
     setTopNavCollapsedState(value);
     localStorage.setItem("cultvr-top-nav-collapsed", String(value));
+    persistProfilePreferences({ topNavCollapsed: value });
     setPrefsOpen(false);
+  };
+
+  const setCustomName = (value: string) => {
+    setCustomNameState(value);
+    persistProfilePreferences({ displayName: value });
   };
 
   const setTab = (next: Tab) => {
@@ -145,36 +170,6 @@ export function AlmanacWorkspace({
   };
 
   const firstName = customName || getDisplayName(userEmail);
-
-  const rings = [
-    {
-      label: "Explore",
-      count: activities.length,
-      goal: 8,
-      color: palette.olive,
-      note: "activities & experiences",
-    },
-    {
-      label: "Distinguish",
-      count: awards.length,
-      goal: 6,
-      color: palette.clay,
-      note: "awards & leadership",
-    },
-    {
-      label: "Reflect",
-      count: notes.length,
-      goal: 12,
-      color: palette.butter,
-      note: "essays & journal entries",
-    },
-  ];
-
-  const depth = Math.round(
-    (rings.reduce((sum, ring) => sum + Math.min(ring.count / ring.goal, 1), 0) /
-      rings.length) *
-      100,
-  );
 
   return (
     <main
@@ -318,12 +313,16 @@ export function AlmanacWorkspace({
             tab={tab}
           />
           {tab === "overview" ? (
-            <Overview
-              depth={depth}
+            <DashboardView
+              awards={awards}
+              collegeList={collegeList}
               firstName={firstName}
               goals={goals}
-              rings={rings}
+              guidedSessions={guidedSessions}
+              notes={notes}
+              onNavigateTab={(next) => setTab(next)}
               tasks={tasks}
+              activities={activities}
             />
           ) : null}
           {tab === "activities" ? <ActivitiesView activities={activities} /> : null}
@@ -453,11 +452,11 @@ function TopBar({
   return (
     <header
       className={[
-        "hidden shrink-0 items-center justify-between border-b border-[color:var(--almanac-rule)] px-8 py-4 lg:flex",
-        topNavCollapsed ? "gap-4" : "gap-6",
+        "hidden shrink-0 items-center justify-between border-b border-[color:var(--almanac-rule)] px-8 lg:flex",
+        topNavCollapsed ? "gap-3 py-3" : "gap-6 py-4",
       ].join(" ")}
     >
-      <Brand />
+      <Brand compact={topNavCollapsed} />
 
       <div className="flex min-w-0 items-center gap-4 xl:gap-6">
         <nav
@@ -564,140 +563,12 @@ function NavIconBtn({
   );
 }
 
-function Overview({
-  depth,
-  firstName,
-  goals,
-  rings,
-  tasks,
-}: {
-  depth: number;
-  firstName: string;
-  goals: Goal[];
-  rings: Array<{
-    label: string;
-    count: number;
-    goal: number;
-    color: string;
-    note: string;
-  }>;
-  tasks: StudentTask[];
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <PageHeader
-        eyebrow="Spring 2026 · Week 14"
-        subtitle="Three things on your plate this week: an essay seed, a recommendation follow-up, and one clearer activity story."
-        title={
-          <>
-            Good evening,{" "}
-            <em className="font-serif italic text-[color:var(--almanac-olive)]">
-              {firstName}
-            </em>
-            .
-          </>
-        }
-      />
-
-      <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto px-5 py-6 md:px-9 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5 md:p-6 xl:col-span-2">
-          <div className="grid items-center gap-7 md:grid-cols-[15rem_1fr]">
-            <div className="relative mx-auto size-52">
-              <ProgressRings rings={rings} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <p className="font-serif text-4xl leading-none">{depth}%</p>
-                <p className="mt-1 text-[0.65rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-                  profile depth
-                </p>
-              </div>
-            </div>
-            <div>
-              <SectionKicker>Your rings</SectionKicker>
-              <div className="mt-3 grid gap-3">
-                {rings.map((ring) => (
-                  <div className="flex items-center gap-4" key={ring.label}>
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: ring.color }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <p className="font-serif text-xl italic">{ring.label}</p>
-                        <p className="text-xs text-[color:var(--almanac-ink-soft)]">
-                          {ring.count} of {ring.goal} · {ring.note}
-                        </p>
-                      </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            backgroundColor: ring.color,
-                            width: `${Math.min((ring.count / ring.goal) * 100, 100)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
-          <SectionKicker>Next moves</SectionKicker>
-          <div className="mt-4 grid gap-3">
-            {tasks.slice(0, 4).map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
-            {!tasks.length ? <Empty label="No tasks yet." /> : null}
-          </div>
-        </section>
-
-        <section className="overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
-          <SectionKicker>Goals</SectionKicker>
-          <div className="mt-4 grid gap-3">
-            {goals.slice(0, 4).map((goal) => (
-              <div
-                className="border-l-4 border-[color:var(--almanac-clay)] bg-[color:var(--almanac-paper-deep)] px-4 py-3 text-sm"
-                key={goal.id}
-              >
-                <p className="font-medium">{goal.title}</p>
-                <p className="mt-1 text-xs text-[color:var(--almanac-ink-soft)]">
-                  Target: {formatDate(goal.target_date)}
-                </p>
-              </div>
-            ))}
-            {!goals.length ? <Empty label="No goals yet." /> : null}
-          </div>
-        </section>
-
-        <section className="min-h-0 overflow-y-auto rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
-          <SectionKicker>Quick capture</SectionKicker>
-          <div className="mt-4 grid gap-4">
-            <InlineTaskForm />
-            <DocumentForm />
-          </div>
-        </section>
-
-        <section className="min-h-0 overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
-          <SectionKicker>AI chat counsellor</SectionKicker>
-          <div className="mt-4">
-            <ChatPanel variant="almanac" />
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
 function ActivitiesView({ activities }: { activities: Activity[] }) {
   return (
     <Scrollable>
       <PageHeader
         action={<AddButton label="Add activity" />}
         eyebrow={`${activities.length} logged`}
-        subtitle="What you have done, where, for how long, and what changed because you were there."
         title={
           <>
             Your{" "}
@@ -744,7 +615,6 @@ function GoalsView({ goals }: { goals: Goal[] }) {
     <Scrollable>
       <PageHeader
         eyebrow={`${goals.length} logged`}
-        subtitle="Targets, deadlines, and milestones. Track what you're working toward and when."
         title={
           <>
             Your{" "}
@@ -755,7 +625,6 @@ function GoalsView({ goals }: { goals: Goal[] }) {
         }
       />
       <div className="grid gap-4 px-5 py-6 md:px-9">
-        <InlineGoalForm />
         {goals.map((goal) => (
           <article
             className="flex items-start justify-between gap-6 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5"
@@ -825,7 +694,6 @@ function DiscoverView() {
     <Scrollable>
       <PageHeader
         eyebrow="Curated for you"
-        subtitle="Resources, deadlines, and opportunities matched to where you are in the process."
         title={
           <>
             <em className="font-serif italic text-[color:var(--almanac-sage)]">Discover</em>
@@ -852,40 +720,6 @@ function DiscoverView() {
         ))}
       </div>
     </Scrollable>
-  );
-}
-
-function InlineGoalForm() {
-  return (
-    <CaptureForm action={createGoal} icon={<Target size={16} />} title="New goal">
-      <TextInput name="title" placeholder="Finish first Common App essay draft" required />
-      <TextInput name="target_date" type="date" />
-      <Submit>Add goal</Submit>
-    </CaptureForm>
-  );
-}
-
-function InlineTaskForm() {
-  return (
-    <CaptureForm action={createTask} icon={<CalendarClock size={16} />} title="Task">
-      <TextInput name="title" placeholder="Ask teacher for recommendation" required />
-      <TextInput name="due_date" type="date" />
-      <Submit>Add task</Submit>
-    </CaptureForm>
-  );
-}
-
-function DocumentForm() {
-  return (
-    <CaptureForm action={uploadDocument} icon={<FileUp size={16} />} title="Document">
-      <input
-        className="min-h-11 rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2 text-sm outline-none focus:border-[color:var(--almanac-olive)]"
-        name="file"
-        required
-        type="file"
-      />
-      <Submit>Upload</Submit>
-    </CaptureForm>
   );
 }
 
@@ -921,7 +755,6 @@ function ActionPlanView() {
     <Scrollable>
       <PageHeader
         eyebrow="Planning"
-        subtitle="A lightweight planning surface for now. Weekly and monthly views keep the workflow visible while generation stays manual."
         title={
           <>
             Action{" "}
@@ -1032,7 +865,6 @@ function TimelineView({
     <Scrollable>
       <PageHeader
         eyebrow="grades 9 → 12"
-        subtitle="Four years on a single page. The shape of the story you will tell."
         title={
           <>
             Your{" "}
@@ -1145,55 +977,6 @@ function Submit({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ProgressRings({
-  rings,
-}: {
-  rings: Array<{ count: number; goal: number; color: string }>;
-}) {
-  const size = 200;
-  const ringWidth = 14;
-  const radii = [88, 66, 44];
-  return (
-    <svg className="h-full w-full" viewBox={`0 0 ${size} ${size}`}>
-      {rings.map((ring, index) => {
-        const r = radii[index];
-        const circumference = 2 * Math.PI * r;
-        const value = Math.min(ring.count / ring.goal, 1);
-        return (
-          <g key={ring.color} transform={`translate(${size / 2} ${size / 2}) rotate(-90)`}>
-            <circle
-              fill="none"
-              r={r}
-              stroke={ring.color}
-              strokeOpacity="0.18"
-              strokeWidth={ringWidth}
-            />
-            <circle
-              fill="none"
-              r={r}
-              stroke={ring.color}
-              strokeDasharray={`${circumference * value} ${circumference}`}
-              strokeLinecap="round"
-              strokeWidth={ringWidth}
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function TaskRow({ task }: { task: StudentTask }) {
-  return (
-    <div className="rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-3">
-      <p className="text-sm font-medium">{task.title}</p>
-      <p className="mt-1 text-xs text-[color:var(--almanac-ink-soft)]">
-        {task.status} · Due: {formatDate(task.due_date)}
-      </p>
-    </div>
-  );
-}
-
 function MobileBar({
   customName,
   navLayout,
@@ -1274,12 +1057,10 @@ function MobileBar({
 function PageHeader({
   action,
   eyebrow,
-  subtitle,
   title,
 }: {
   action?: React.ReactNode;
   eyebrow: string;
-  subtitle?: string;
   title: React.ReactNode;
 }) {
   return (
@@ -1291,11 +1072,6 @@ function PageHeader({
         <h1 className="mt-2 font-serif text-4xl leading-none md:text-5xl">
           {title}
         </h1>
-        {subtitle ? (
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-            {subtitle}
-          </p>
-        ) : null}
       </div>
       {action ? <div className="flex items-center gap-3">{action}</div> : null}
     </header>
@@ -1389,3 +1165,5 @@ function shortDate(date: string | null) {
     day: "numeric",
   }).format(new Date(date));
 }
+
+
