@@ -137,10 +137,8 @@ export function DashboardView({
             onNavigateTab={onNavigateTab}
           />
         ) : null}
-        {activeTab === "story-activities" ? <StoryActivitiesTab model={model} /> : null}
-        {activeTab === "weekly-plan" ? (
-          <WeeklyPlanTab model={model} onNavigateTab={onNavigateTab} />
-        ) : null}
+        {activeTab === "story-activities" ? <StoryActivitiesTab /> : null}
+        {activeTab === "weekly-plan" ? <WeeklyPlanTab /> : null}
         {activeTab === "college-list" ? <CollegeListTab model={model} /> : null}
         {activeTab === "application-readiness" ? <ReadinessTab model={model} /> : null}
       </div>
@@ -187,71 +185,26 @@ function ContinueTab({
   );
 }
 
-function StoryActivitiesTab({ model }: { model: DashboardModel }) {
-  return (
-    <div className="grid gap-5">
-      <Section
-        kicker="Story signals"
-        title="Patterns starting to appear"
-        description="These are the themes to keep testing in future reflections."
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {model.storySignals.map((signal) => (
-            <SignalCard key={signal.label} signal={signal} />
-          ))}
-        </div>
-      </Section>
-
-      <div className="grid gap-5">
-        <Section kicker="Reflection library" title="Recent reflection notes">
-          <div className="grid gap-3">
-            {model.reflections.map((reflection) => (
-              <ReflectionRow key={reflection.id} reflection={reflection} />
-            ))}
-          </div>
-        </Section>
-      </div>
-    </div>
-  );
+function StoryActivitiesTab() {
+  return <ComingSoonPanel kicker="Activities" title="Coming soon" />;
 }
 
-function WeeklyPlanTab({
-  model,
-  onNavigateTab,
-}: {
-  model: DashboardModel;
-  onNavigateTab?: (tab: "sessions" | "action-plan") => void;
-}) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-      <Section
-        kicker="Weekly plan"
-        title="Small actions that move the application forward"
-        description="The plan stays practical: short reflections, cleaner activity lines, and concrete follow-ups."
-      >
-        <div className="grid gap-3">
-          {model.weeklyActions.map((action) => (
-            <WeeklyActionRow
-              action={action}
-              key={action.title}
-              onStart={() => onNavigateTab?.("sessions")}
-            />
-          ))}
-        </div>
-      </Section>
+function WeeklyPlanTab() {
+  return <ComingSoonPanel kicker="Weekly plan" title="Coming soon" />;
+}
 
-      <aside className="grid gap-4 self-start">
-        <Section kicker="Completed" title="This week">
-          <div className="grid gap-2">
-            {model.completedThisWeek.map((item) => (
-              <Pill key={item}>{item}</Pill>
-            ))}
-          </div>
-        </Section>
-        <SmallPanel label="Suggested next voice prompt">
-          {model.continuePanel.recommendedPrompt}
-        </SmallPanel>
-      </aside>
+function ComingSoonPanel({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-10 text-center">
+      <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-[color:var(--almanac-ink-soft)]">
+        {kicker}
+      </p>
+      <h2 className="mt-3 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)] md:text-4xl">
+        {title}
+      </h2>
+      <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+        We&apos;re still designing this section. It will arrive in a future update.
+      </p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import type { Note } from "@/lib/types";
 const sessionTypes = [
   {
     id: "activity-impact",
-    label: "Activity impact builder",
+    label: "Activity list",
     focus: "Move an activity from participation to measurable contribution.",
     prompts: [
       "What is the activity, role, and time commitment?",

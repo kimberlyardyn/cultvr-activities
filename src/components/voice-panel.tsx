@@ -1,7 +1,9 @@
 "use client";
 
-import { Loader2, Mic, PhoneOff } from "lucide-react";
+import { Check, FileUp, Loader2, Mic, PhoneOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { uploadDocument } from "@/app/dashboard/actions";
 
 type VoiceStatus = "idle" | "connecting" | "live" | "error";
 
@@ -28,6 +30,11 @@ export function VoicePanel({
   const [messages, setMessages] = useState<Array<{ role: "student" | "coach"; text: string }>>(
     [],
   );
+  const [importState, setImportState] = useState<"idle" | "uploading" | "uploaded" | "error">(
+    "idle",
+  );
+  const [importedFileName, setImportedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -244,6 +251,49 @@ export function VoicePanel({
       ? "inline-flex h-11 min-w-[8.75rem] items-center justify-center gap-2 rounded-md bg-[#b0453b] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#943a31] disabled:opacity-50"
       : "inline-flex h-11 min-w-[8.75rem] items-center justify-center gap-2 rounded-md bg-[#2f5d46] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#264b39] disabled:opacity-50";
 
+  const importClassName = isAlmanac
+    ? "inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-[color:var(--almanac-paper-deep)] disabled:opacity-50"
+    : "inline-flex h-11 items-center justify-center gap-2 rounded-md border border-black/15 bg-white px-4 text-sm font-semibold text-[#17201b] transition hover:bg-[#f3f1ea] disabled:opacity-50";
+
+  const importLabel =
+    importState === "uploading"
+      ? "Uploading…"
+      : importState === "uploaded"
+        ? "Imported"
+        : importState === "error"
+          ? "Try again"
+          : "Import document";
+
+  const importIcon =
+    importState === "uploading" ? (
+      <Loader2 size={16} strokeWidth={2.1} className="animate-spin" />
+    ) : importState === "uploaded" ? (
+      <Check size={16} strokeWidth={2.1} />
+    ) : (
+      <FileUp size={16} strokeWidth={2.1} />
+    );
+
+  async function handleImportChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportState("uploading");
+    setImportedFileName(file.name);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      await uploadDocument(formData);
+      setImportState("uploaded");
+      setTimeout(() => setImportState("idle"), 2400);
+    } catch (err) {
+      console.error("Document import failed", err);
+      setImportState("error");
+      setTimeout(() => setImportState("idle"), 2400);
+    } finally {
+      // Reset input so the same file can be re-picked later.
+      event.target.value = "";
+    }
+  }
+
   function upsertTranscriptMessage(
     role: "student" | "coach",
     itemId: string,
@@ -322,6 +372,40 @@ export function VoicePanel({
               }
             >
               {actionHint}
+            </div>
+          </div>
+        </div>
+
+        {/* Import a document — feeds the session context (resumes, awards lists,
+            essay drafts). Uses the existing uploadDocument server action. */}
+        <div className="group relative inline-flex">
+          <input
+            accept=".pdf,.doc,.docx,.txt,.md,.rtf,.png,.jpg,.jpeg"
+            className="sr-only"
+            onChange={handleImportChange}
+            ref={fileInputRef}
+            type="file"
+          />
+          <button
+            className={importClassName}
+            disabled={importState === "uploading"}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            <span className="flex size-5 shrink-0 items-center justify-center">{importIcon}</span>
+            <span>{importLabel}</span>
+          </button>
+          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-72 opacity-0 transition group-hover:opacity-100">
+            <div
+              className={
+                isAlmanac
+                  ? "rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-3 py-2 text-xs leading-5 text-[color:var(--almanac-ink-soft)] shadow-lg shadow-black/5"
+                  : "rounded-lg border border-black/10 bg-white px-3 py-2 text-xs leading-5 text-[#55615b] shadow-lg shadow-black/5"
+              }
+            >
+              {importState === "uploaded" && importedFileName
+                ? `Imported ${importedFileName}. Your counsellor can reference it.`
+                : "Upload a resume, transcript, or essay draft. The coach can reference it during the session."}
             </div>
           </div>
         </div>
