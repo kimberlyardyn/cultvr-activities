@@ -1,10 +1,14 @@
 "use client";
 
-import { BookOpen, GraduationCap, ListTodo, Mic, Plus, School, Sparkles } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Award as AwardIcon, BookOpen, ListTodo, Mic, Plus, Settings, Sparkles, Target, TrendingUp, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
+import { ActivitiesTab } from "@/components/activities-tab";
+import { AwardsTab } from "@/components/awards-tab";
+import { WeeklyChallengeTab } from "@/components/weekly-challenge-tab";
 import {
   createCollegeListEntry,
+  deleteCollegeListEntry,
   updateCollegeListEntry,
 } from "@/app/dashboard/actions";
 import {
@@ -30,8 +34,10 @@ import type {
   Goal,
   GuidedSession,
   Note,
+  StudentAdmissionsProfile,
   StudentMemory,
   StudentTask,
+  WeeklyChallenge,
 } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -46,25 +52,41 @@ type DashboardViewProps = {
   activities: Activity[];
   collegeList: CollegeListEntry[];
   studentMemories: StudentMemory[];
+  studentProfile: StudentAdmissionsProfile | null;
+  weeklyChallenges: WeeklyChallenge[];
 };
 
 const tabs: Array<{ id: DashboardTab; label: string; icon: typeof Sparkles }> = [
   { id: "continue", label: "Workspace", icon: Sparkles },
   { id: "story-activities", label: "Activities", icon: BookOpen },
-  { id: "weekly-plan", label: "Weekly Plan", icon: ListTodo },
-  { id: "college-list", label: "College List", icon: School },
-  { id: "application-readiness", label: "Application Readiness", icon: GraduationCap },
+  { id: "awards", label: "Awards", icon: AwardIcon },
+  { id: "weekly-challenge", label: "Weekly Challenge", icon: ListTodo },
+  { id: "college-list", label: "Targets", icon: Target },
+  { id: "application-readiness", label: "Progress", icon: TrendingUp },
 ];
 
 const collegeStatuses = [
-  "Interested",
-  "Researching",
-  "Likely",
-  "Target",
+  "Dream",
   "Reach",
-  "Applying",
-  "Archived",
+  "Match",
+  "Necessity",
+  "Getting Close",
+  "Actualized",
+  "Set Aside For Now",
 ] as const;
+
+const activeStatuses = ["Dream", "Reach", "Match", "Necessity", "Getting Close"] as const;
+const closedStatuses = ["Actualized", "Set Aside For Now"] as const;
+
+const statusColors: Record<(typeof collegeStatuses)[number], string> = {
+  Dream: "#E0B26B",
+  Reach: "#C97A5D",
+  Match: "#7A86A8",
+  Necessity: "#3F4A66",
+  "Getting Close": "#3F7D4A",
+  Actualized: "#5e8a64",
+  "Set Aside For Now": "#9a9a9a",
+};
 
 const collegePriorities = ["High", "Medium", "Low"] as const;
 
@@ -76,9 +98,11 @@ export function DashboardView({
   notes,
   onNavigateTab,
   studentMemories,
+  studentProfile,
   tasks,
   activities,
   collegeList,
+  weeklyChallenges,
 }: DashboardViewProps) {
   const model = useMemo(
     () =>
@@ -139,12 +163,30 @@ export function DashboardView({
             firstName={firstName}
             model={model}
             onNavigateTab={onNavigateTab}
+            activities={activities}
+            awards={awards}
           />
         ) : null}
-        {activeTab === "story-activities" ? <StoryActivitiesTab /> : null}
-        {activeTab === "weekly-plan" ? <WeeklyPlanTab /> : null}
+        {activeTab === "story-activities" ? <ActivitiesTab activities={activities} notes={notes} goals={goals} /> : null}
+        {activeTab === "awards" ? <AwardsTab awards={awards} activities={activities} goals={goals} /> : null}
+        {activeTab === "weekly-challenge" ? (
+          <WeeklyChallengeTab challenges={weeklyChallenges} />
+        ) : null}
         {activeTab === "college-list" ? <CollegeListTab model={model} /> : null}
-        {activeTab === "application-readiness" ? <ReadinessTab model={model} /> : null}
+        {activeTab === "application-readiness" ? (
+          <ProgressTab
+            activities={activities}
+            awards={awards}
+            collegeList={collegeList}
+            goals={goals}
+            guidedSessions={guidedSessions}
+            model={model}
+            notes={notes}
+            studentMemories={studentMemories}
+            studentProfile={studentProfile}
+            weeklyChallenges={weeklyChallenges}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -154,10 +196,14 @@ function ContinueTab({
   firstName,
   model,
   onNavigateTab,
+  activities,
+  awards,
 }: {
   firstName: string;
   model: DashboardModel;
   onNavigateTab?: (tab: "sessions" | "action-plan") => void;
+  activities: Activity[];
+  awards: Award[];
 }) {
   return (
     <div className="flex w-full flex-col gap-5">
@@ -182,7 +228,7 @@ function ContinueTab({
         </div>
       </section>
 
-      <ProfileDepthOverview depth={model.profileDepth} />
+      <ProfileDepthOverview activities={activities} awards={awards} />
 
       <KnowledgeGraphPanel graph={model.knowledgeGraph} />
     </div>
@@ -191,10 +237,6 @@ function ContinueTab({
 
 function StoryActivitiesTab() {
   return <ComingSoonPanel kicker="Activities" title="Coming soon" />;
-}
-
-function WeeklyPlanTab() {
-  return <ComingSoonPanel kicker="Weekly plan" title="Coming soon" />;
 }
 
 function ComingSoonPanel({ kicker, title }: { kicker: string; title: string }) {
@@ -214,48 +256,232 @@ function ComingSoonPanel({ kicker, title }: { kicker: string; title: string }) {
 }
 
 function CollegeListTab({ model }: { model: DashboardModel }) {
-  const hasColleges = model.collegeList.length > 0;
+  const active = model.collegeList.filter(
+    (t) => !closedStatuses.includes(t.status as (typeof closedStatuses)[number]),
+  );
+  const closed = model.collegeList.filter((t) =>
+    closedStatuses.includes(t.status as (typeof closedStatuses)[number]),
+  );
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <Section
-        kicker="College list"
-        title="Schools worth tracking"
-        description="Keep fit notes tied to what comes up in sessions, not just rankings."
-      >
-        {hasColleges ? (
-          <div className="grid gap-3">
-            {model.collegeList.map((college) => (
-              <CollegeCard college={college} key={college.id} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5">
-            <h3 className="font-serif text-2xl leading-tight">Start with one school you are curious about.</h3>
-            <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-              Add the school and one honest reason it might fit. Later, guided sessions can update this list when a college comes up in conversation.
-            </p>
-          </div>
-        )}
-      </Section>
+      <div className="grid gap-5">
+        <Section
+          kicker="Targets"
+          title="What you're working toward"
+          description="Schools, jobs, programs, skills, qualities — anything you want in your sights. Mark each one as a dream, reach, match, or necessity."
+        >
+          {active.length ? (
+            <div className="grid gap-3">
+              {active.map((target) => (
+                <CollegeCard college={target} key={target.id} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5">
+              <h3 className="font-serif text-2xl leading-tight">Start with one target you're curious about.</h3>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+                A school, a job, a fellowship, a skill, a quality you want to grow — anything you're working toward.
+              </p>
+            </div>
+          )}
+        </Section>
+
+        {closed.length ? (
+          <Section
+            kicker="Closed"
+            title="Actualized & set aside"
+            description="Targets you've achieved, manifested, or chosen to pause."
+          >
+            <div className="grid gap-3">
+              {closed.map((target) => (
+                <CollegeCard college={target} key={target.id} />
+              ))}
+            </div>
+          </Section>
+        ) : null}
+      </div>
 
       <aside className="grid gap-4 self-start">
         <CollegeListForm />
         <SmallPanel label="Conversation updates">
-          When a session mentions a college, fit preference, major, location, or program type, it can be saved here as a school note.
+          When a session mentions a target, it can be saved here automatically.
         </SmallPanel>
       </aside>
     </div>
   );
 }
 
-function ReadinessTab({ model }: { model: DashboardModel }) {
+function ProgressTab({
+  activities,
+  awards,
+  collegeList,
+  goals,
+  guidedSessions,
+  model,
+  notes,
+  studentMemories,
+  studentProfile,
+  weeklyChallenges,
+}: {
+  activities: Activity[];
+  awards: Award[];
+  collegeList: CollegeListEntry[];
+  goals: Goal[];
+  guidedSessions: GuidedSession[];
+  model: DashboardModel;
+  notes: Note[];
+  studentMemories: StudentMemory[];
+  studentProfile: StudentAdmissionsProfile | null;
+  weeklyChallenges: WeeklyChallenge[];
+}) {
+  const wordsWritten = useMemo(() => {
+    const fromNotes = notes.reduce((sum, n) => sum + countWords(n.body), 0);
+    const fromSessions = guidedSessions.reduce(
+      (sum, s) => sum + countWords(s.summary) + countWords(s.transcript),
+      0,
+    );
+    return fromNotes + fromSessions;
+  }, [notes, guidedSessions]);
+
+  const readyActivities = activities.filter(
+    (a) => a.role?.trim() && a.impact?.trim(),
+  ).length;
+
+  const completedChallenges = weeklyChallenges.filter(
+    (c) => c.status === "completed",
+  ).length;
+
+  const voiceSessions = guidedSessions.filter(
+    (s) => s.interaction_mode === "voice" || s.interaction_mode === "mixed",
+  ).length;
+
+  const hasMajors = (studentProfile?.intended_majors?.length ?? 0) > 0;
+  const hasInterests = (studentProfile?.interests?.length ?? 0) > 0;
+  const themeMemory = studentMemories.find(
+    (m) => m.memory_type === "theme" || m.memory_type === "essay_seed",
+  );
+  const directionIdentified = hasMajors || hasInterests || Boolean(themeMemory);
+  const directionLabel = directionIdentified
+    ? studentProfile?.intended_majors?.[0] ||
+      studentProfile?.interests?.[0] ||
+      themeMemory?.label ||
+      "Emerging"
+    : "Not yet";
+  const directionDetail = directionIdentified
+    ? hasMajors
+      ? "academic major identified"
+      : hasInterests
+        ? "interest area identified"
+        : "theme surfacing in sessions"
+    : "explore in sessions to surface one";
+
+  // Resume / application list readiness — derived from activity quality.
+  const totalActivities = activities.length;
+  const resumeStatus =
+    totalActivities === 0
+      ? "Not yet"
+      : readyActivities === totalActivities
+        ? "Ready"
+        : "Drafting";
+  const resumeDetail =
+    totalActivities === 0
+      ? "add activities to seed it"
+      : `${readyActivities} of ${totalActivities} application-ready`;
+
+  const achievements = useMemo(
+    () => computeAchievements({ activities, awards, notes, goals, collegeList }),
+    [activities, awards, notes, goals, collegeList],
+  );
+  const earnedCount = achievements.filter((a) => a.unlocked).length;
+
   return (
     <div className="grid gap-5">
       <Section
-        kicker="Readiness overview"
-        title="How close the student is to application-ready material"
-        description="This view maps reflection work to actual admissions outputs."
+        kicker="Engagement"
+        title="How active you've been"
+        description="A snapshot of what you've put into the app — every entry, reflection, and challenge adds up."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <EngagementCard
+            detail={`${readyActivities} ready to use`}
+            label="Activities"
+            value={`${activities.length}`}
+          />
+          <EngagementCard
+            detail="collected"
+            label="Awards"
+            value={`${awards.length}`}
+          />
+          <EngagementCard
+            detail={notes.length === 1 ? "note captured" : "notes captured"}
+            label="Reflections"
+            value={`${notes.length}`}
+          />
+          <EngagementCard
+            detail={voiceSessions === 1 ? "session" : "sessions"}
+            label="Voice sessions"
+            value={`${voiceSessions}`}
+          />
+          <EngagementCard
+            detail={goals.length === 1 ? "goal set" : "goals set"}
+            label="Goals"
+            value={`${goals.length}`}
+          />
+          <EngagementCard
+            detail="completed"
+            label="Weekly challenges"
+            value={`${completedChallenges}`}
+          />
+          <EngagementCard
+            detail="across notes & sessions"
+            label="Words written"
+            value={wordsWritten.toLocaleString("en")}
+          />
+          <EngagementCard
+            detail="schools, jobs, programs in sight"
+            label="Long-term targets"
+            value={`${collegeList.length}`}
+          />
+          <EngagementCard
+            detail={resumeDetail}
+            label="Application list"
+            value={resumeStatus}
+          />
+          <EngagementCard
+            detail={directionDetail}
+            label="Direction"
+            value={directionLabel}
+          />
+        </div>
+      </Section>
+
+      <Section
+        kicker="Achievements"
+        title="Badges you've earned"
+        description={`${earnedCount} of ${achievements.length} unlocked — keep logging to collect them all.`}
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {achievements.map((a) => (
+            <AchievementBadge
+              description={a.description}
+              emoji={a.emoji}
+              key={a.title}
+              title={a.title}
+              unlocked={a.unlocked}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <Section kicker="Weekly Challenge" title="Last 8 weeks">
+        <WeeklyChallengeTracker challenges={weeklyChallenges} />
+      </Section>
+
+      <Section
+        kicker="Profile development"
+        title="Where your story is coming together"
+        description="How the material you've added is shaping up across the dimensions that matter."
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {model.readinessAreas.map((area) => (
@@ -263,33 +489,6 @@ function ReadinessTab({ model }: { model: DashboardModel }) {
           ))}
         </div>
       </Section>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Section kicker="Common App" title="Activities and essay direction">
-          <div className="grid gap-3">
-            <ReadinessLine label="Activities drafted" value={`${model.commonAppReadiness.drafted} / 10`} />
-            <ReadinessLine label="Application-ready" value={`${model.commonAppReadiness.ready}`} />
-            <ReadinessLine
-              label="Need stronger impact"
-              value={`${model.commonAppReadiness.needsStrongerImpact}`}
-            />
-            <div className="flex flex-wrap gap-2">
-              {model.commonAppReadiness.missingCategories.map((item) => (
-                <Pill key={item}>{item}</Pill>
-              ))}
-            </div>
-          </div>
-        </Section>
-
-        <Section kicker="UC readiness" title="Categories to strengthen">
-          <div className="grid gap-3">
-            <ReadinessLine label="Activities & awards" value={model.ucReadiness.activitiesAndAwards} />
-            <ReadinessLine label="Leadership" value={model.ucReadiness.leadership} />
-            <ReadinessLine label="Education prep" value={model.ucReadiness.educationalPreparation} />
-            <ReadinessLine label="Service" value={model.ucReadiness.volunteering} />
-          </div>
-        </Section>
-      </div>
 
       <Section kicker="Profile diagnosis" title="Counselor read">
         <div className="grid gap-4 lg:grid-cols-3">
@@ -304,6 +503,301 @@ function ReadinessTab({ model }: { model: DashboardModel }) {
         </div>
       </Section>
     </div>
+  );
+}
+
+function EngagementCard({
+  detail,
+  label,
+  value,
+}: {
+  detail: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
+      <p className="text-[0.65rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+        {label}
+      </p>
+      <p className="mt-2 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)]">
+        {value}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
+        {detail}
+      </p>
+    </article>
+  );
+}
+
+function countWords(text: string | null | undefined): number {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+// ── Achievements ─────────────────────────────────────────────────────────────
+
+type Achievement = {
+  emoji: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+};
+
+const LEADERSHIP_WORDS = [
+  "president", "captain", "founder", "co-founder", "leader", "lead ", "officer",
+  "chair", "director", "manager", "coordinator", "council", "head ",
+  "student government", "editor-in-chief", "section leader",
+];
+
+const VOLUNTEER_WORDS = [
+  "volunteer", "service", "community", "nonprofit", "non-profit", "charity",
+  "outreach", "fundrais", "donate", "shelter", "food bank", "soup kitchen",
+  "habitat", "red cross", "civic", "tutor",
+];
+
+function activityText(a: Activity): string {
+  return [a.name, a.role, a.position, a.category, (a.tags ?? []).join(" "), a.impact, a.description]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Longest run of consecutive calendar days present in the given day-strings. */
+function longestDailyStreak(days: string[]): number {
+  const unique = Array.from(new Set(days)).sort();
+  if (!unique.length) return 0;
+  let longest = 1;
+  let current = 1;
+  for (let i = 1; i < unique.length; i++) {
+    const prev = new Date(`${unique[i - 1]}T00:00:00`);
+    const cur = new Date(`${unique[i]}T00:00:00`);
+    const diff = Math.round((cur.getTime() - prev.getTime()) / 86_400_000);
+    if (diff === 1) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else if (diff > 1) {
+      current = 1;
+    }
+  }
+  return longest;
+}
+
+function computeAchievements({
+  activities,
+  awards,
+  collegeList,
+  goals,
+  notes,
+}: {
+  activities: Activity[];
+  awards: Award[];
+  collegeList: CollegeListEntry[];
+  goals: Goal[];
+  notes: Note[];
+}): Achievement[] {
+  const totalEntries =
+    activities.length + awards.length + notes.length + goals.length;
+
+  const entryDays = [
+    ...activities.map((a) => a.created_at),
+    ...awards.map((a) => a.created_at),
+    ...notes.map((n) => n.created_at),
+    ...goals.map((g) => g.created_at),
+  ]
+    .filter(Boolean)
+    .map(localDay);
+  const streak = longestDailyStreak(entryDays);
+
+  const categorySet = new Set<string>();
+  for (const a of activities) {
+    if (a.category?.trim()) categorySet.add(a.category.trim().toLowerCase());
+    for (const t of a.tags ?? []) if (t.trim()) categorySet.add(t.trim().toLowerCase());
+  }
+
+  const finishedSomething =
+    goals.some((g) => g.status === "completed") ||
+    collegeList.some((t) => t.status === "Actualized") ||
+    activities.some((a) => a.in_progress === false && Boolean(a.end_date));
+
+  const hasLeadership = activities.some((a) => {
+    const t = activityText(a);
+    return LEADERSHIP_WORDS.some((w) => t.includes(w));
+  });
+  const hasVolunteer = activities.some((a) => {
+    const t = activityText(a);
+    return VOLUNTEER_WORDS.some((w) => t.includes(w));
+  });
+
+  return [
+    { emoji: "📝", title: "First Entry", description: "Log your first progress update", unlocked: totalEntries >= 1 },
+    { emoji: "🔥", title: "3-Day Streak", description: "Log activity 3 days in a row", unlocked: streak >= 3 },
+    { emoji: "🔥", title: "7-Day Streak", description: "Log activity 7 days in a row", unlocked: streak >= 7 },
+    { emoji: "🏅", title: "30-Day Streak", description: "Log activity 30 days in a row", unlocked: streak >= 30 },
+    { emoji: "🌟", title: "Well-Rounded", description: "Activities in 3+ categories", unlocked: categorySet.size >= 3 },
+    { emoji: "✅", title: "Closer", description: "Mark your first activity complete", unlocked: finishedSomething },
+    { emoji: "🏆", title: "Overachiever", description: "Log 5 or more awards", unlocked: awards.length >= 5 },
+    { emoji: "👑", title: "First Leadership Role", description: "Lead an activity or team", unlocked: hasLeadership },
+    { emoji: "🤝", title: "First Volunteer Role", description: "Join a service activity", unlocked: hasVolunteer },
+    { emoji: "💎", title: "SuperAchiever", description: "Log 10 or more awards", unlocked: awards.length >= 10 },
+    { emoji: "⭐", title: "5 Activities", description: "Log 5 or more activities", unlocked: activities.length >= 5 },
+    { emoji: "🌠", title: "10 Activities", description: "Log 10 or more activities", unlocked: activities.length >= 10 },
+    { emoji: "🚀", title: "20 Activities", description: "Log 20 or more activities", unlocked: activities.length >= 20 },
+  ];
+}
+
+function AchievementBadge({
+  description,
+  emoji,
+  title,
+  unlocked,
+}: Achievement) {
+  return (
+    <article
+      className={[
+        "flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition",
+        unlocked
+          ? "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]"
+          : "border-dashed border-[color:var(--almanac-rule)] opacity-60",
+      ].join(" ")}
+    >
+      <span
+        aria-hidden
+        className="text-3xl leading-none"
+        style={unlocked ? undefined : { filter: "grayscale(1)" }}
+      >
+        {emoji}
+      </span>
+      <div className="min-h-0">
+        <p className="font-serif text-[0.95rem] leading-tight text-[color:var(--almanac-ink)]">
+          {title}
+        </p>
+        <p className="mt-0.5 text-[0.68rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+          {description}
+        </p>
+      </div>
+      <span
+        className={[
+          "rounded-full px-2 py-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.12em]",
+          unlocked
+            ? "bg-[color:var(--almanac-olive)]/15 text-[color:var(--almanac-olive)]"
+            : "bg-black/5 text-[color:var(--almanac-ink-soft)]",
+        ].join(" ")}
+      >
+        {unlocked ? "Earned" : "Locked"}
+      </span>
+    </article>
+  );
+}
+
+// ── Weekly Challenge tracker ────────────────────────────────────────────────
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = (day + 6) % 7; // Monday = 0, Sunday = 6
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+type WeekCell = { weekStart: string; state: "completed" | "set" | "none" };
+
+function buildWeekTracker(challenges: WeeklyChallenge[]): WeekCell[] {
+  const thisMonday = startOfWeek(new Date());
+  const cells: WeekCell[] = [];
+  for (let i = 7; i >= 0; i--) {
+    const m = new Date(thisMonday);
+    m.setDate(thisMonday.getDate() - i * 7);
+    const weekStart = toISODate(m);
+    const inWeek = challenges.filter((c) => c.week_start_date === weekStart);
+    let state: WeekCell["state"] = "none";
+    if (inWeek.some((c) => c.status === "completed")) state = "completed";
+    else if (inWeek.length > 0) state = "set";
+    cells.push({ weekStart, state });
+  }
+  return cells;
+}
+
+function weekStateColor(state: WeekCell["state"]): string {
+  if (state === "completed") return "var(--almanac-olive)";
+  if (state === "set") return "var(--almanac-butter)";
+  return "rgba(0,0,0,0.08)";
+}
+
+function weekStateLabel(state: WeekCell["state"]): string {
+  if (state === "completed") return "Completed";
+  if (state === "set") return "Challenge set";
+  return "No activity";
+}
+
+function WeeklyChallengeTracker({ challenges }: { challenges: WeeklyChallenge[] }) {
+  const weeks = useMemo(() => buildWeekTracker(challenges), [challenges]);
+  const completed = weeks.filter((w) => w.state === "completed").length;
+  const message =
+    completed === 0
+      ? "Start a streak!"
+      : completed >= 8
+        ? "Perfect run — every week completed!"
+        : "Keep it going!";
+
+  return (
+    <div>
+      <div className="flex items-end gap-2">
+        {weeks.map((w) => {
+          const [, mm, dd] = w.weekStart.split("-");
+          return (
+            <div className="flex flex-1 flex-col items-center gap-1.5" key={w.weekStart}>
+              <div
+                className="aspect-square w-full max-w-[3.5rem] rounded-lg border border-black/5"
+                style={{ backgroundColor: weekStateColor(w.state) }}
+                title={`Week of ${w.weekStart}: ${weekStateLabel(w.state)}`}
+              />
+              <span className="text-[0.6rem] text-[color:var(--almanac-ink-soft)]">
+                {Number(mm)}/{Number(dd)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.72rem] text-[color:var(--almanac-ink-soft)]">
+        <LegendSwatch color={weekStateColor("completed")} label="Completed" />
+        <LegendSwatch color={weekStateColor("set")} label="Challenge set" />
+        <LegendSwatch color={weekStateColor("none")} label="No activity" />
+      </div>
+
+      <p className="mt-3 text-sm text-[color:var(--almanac-ink)]">
+        <span className="font-semibold">{completed} of 8 weeks</span> completed — {message}
+      </p>
+    </div>
+  );
+}
+
+function LegendSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="size-3 rounded-[4px] border border-black/5"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
   );
 }
 
@@ -363,12 +857,184 @@ function SmallPanel({ children, label }: { children: ReactNode; label: string })
   );
 }
 
-function ProfileDepthOverview({ depth }: { depth: ProfileDepth }) {
+const TAG_COLORS = ["#4e5b7a", "#d27b57", "#efc97a", "#7a9e7a", "#9b7ab8", "#5b8fa8", "#c4697a", "#8a7a5b"];
+const DEFAULT_TAGS = ["STEM", "Humanities", "Leadership", "Social Service"];
+const STORAGE_KEY = "cultvr-profile-depth-tags";
+
+/** Keyword map used to auto-classify activities/awards into tags. */
+const TAG_KEYWORDS: Record<string, string[]> = {
+  stem: ["stem", "science", "math", "engineering", "technology", "robotics", "coding", "computer", "physics", "chemistry", "biology", "data", "research", "lab"],
+  humanities: ["humanities", "history", "english", "writing", "literature", "philosophy", "language", "social studies", "debate", "speech", "journalism", "reading"],
+  leadership: ["leadership", "president", "captain", "founder", "lead", "officer", "chair", "director", "manager", "mentor", "council", "student government"],
+  "social service": ["service", "volunteer", "community", "nonprofit", "charity", "outreach", "tutor", "mentor", "fundrais", "advocacy", "civic"],
+  arts: ["art", "music", "theater", "theatre", "dance", "film", "photography", "design", "creative", "paint", "draw", "sculpt", "sing", "choir", "orchestra", "band"],
+  creativity: ["creative", "innovation", "invent", "design", "maker", "craft", "build", "create", "entrepreneurship", "startup"],
+};
+
+function loadTags(): string[] {
+  if (typeof window === "undefined") return DEFAULT_TAGS;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch { /* use defaults */ }
+  return DEFAULT_TAGS;
+}
+
+function saveTags(tags: string[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
+}
+
+function classifyItem(text: string, tags: string[]): string[] {
+  const lower = text.toLowerCase();
+  return tags.filter((tag) => {
+    const keywords = TAG_KEYWORDS[tag.toLowerCase()];
+    if (keywords) return keywords.some((kw) => lower.includes(kw));
+    return lower.includes(tag.toLowerCase());
+  });
+}
+
+function buildTagDepth(activities: Activity[], awards: Award[], tags: string[]): ProfileDepth {
+  const counts = new Map<string, number>();
+  tags.forEach((tag) => counts.set(tag, 0));
+
+  for (const activity of activities) {
+    const text = `${activity.name} ${activity.role ?? ""} ${activity.impact ?? ""}`;
+    const matched = classifyItem(text, tags);
+    for (const tag of matched) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+
+  for (const award of awards) {
+    const text = `${award.name} ${award.scope ?? ""}`;
+    const matched = classifyItem(text, tags);
+    for (const tag of matched) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+
+  const goal = 5;
+  const breakdown: ProfileDepthBreakdown[] = tags.map((tag, i) => ({
+    label: tag,
+    current: Math.min(counts.get(tag) ?? 0, goal),
+    goal,
+    note: `activities & awards`,
+    color: TAG_COLORS[i % TAG_COLORS.length],
+  }));
+
+  const total = breakdown.reduce((sum, b) => sum + b.current / b.goal, 0);
+  const value = breakdown.length ? Math.round((total / breakdown.length) * 100) : 0;
+
+  return { value, breakdown };
+}
+
+function ProfileDepthOverview({ activities, awards }: { activities: Activity[]; awards: Award[] }) {
+  const [tags, setTags] = useState<string[]>(DEFAULT_TAGS);
+  const [editing, setEditing] = useState(false);
+  const [newTag, setNewTag] = useState("");
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setTags(loadTags());
+  }, []);
+
+  useEffect(() => {
+    if (!editing) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setEditing(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [editing]);
+
+  const updateTags = useCallback((next: string[]) => {
+    setTags(next);
+    saveTags(next);
+  }, []);
+
+  const addTag = useCallback(() => {
+    const trimmed = newTag.trim();
+    if (!trimmed || tags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
+    updateTags([...tags, trimmed]);
+    setNewTag("");
+  }, [newTag, tags, updateTags]);
+
+  const removeTag = useCallback((tag: string) => {
+    updateTags(tags.filter((t) => t !== tag));
+  }, [tags, updateTags]);
+
+  const depth = useMemo(() => buildTagDepth(activities, awards, tags), [activities, awards, tags]);
+
   return (
     <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5 md:p-6">
-      <p className="text-[0.65rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-        Profile depth
-      </p>
+      <div className="relative flex items-center justify-between">
+        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
+          Profile depth
+        </p>
+        <button
+          className="rounded-full p-1.5 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
+          onClick={() => setEditing(!editing)}
+          title="Edit categories"
+          type="button"
+        >
+          <Settings size={14} />
+        </button>
+
+        {editing && (
+          <div
+            ref={popoverRef}
+            className="absolute right-0 top-8 z-20 w-72 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-4 shadow-lg"
+          >
+            <p className="text-xs font-medium text-[color:var(--almanac-ink)]">
+              Customize categories
+            </p>
+            <p className="mt-1 text-[0.68rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+              Add or remove tags to track your profile depth.
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {tags.map((tag, i) => (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                  key={tag}
+                  style={{ backgroundColor: TAG_COLORS[i % TAG_COLORS.length] }}
+                >
+                  {tag}
+                  <button
+                    className="ml-0.5 rounded-full p-0.5 transition hover:bg-white/25"
+                    onClick={() => removeTag(tag)}
+                    type="button"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[#3F4A66]"
+                maxLength={30}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                placeholder="New category…"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+              />
+              <button
+                className="inline-flex items-center gap-1 rounded-lg bg-[color:var(--almanac-ink)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+                onClick={addTag}
+                type="button"
+              >
+                <Plus size={12} />
+                Add
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="mt-4 grid items-center gap-7 md:grid-cols-[15rem_1fr]">
         <div className="relative mx-auto size-52">
           <ProgressRings rings={depth.breakdown} />
@@ -392,7 +1058,7 @@ function ProfileDepthOverview({ depth }: { depth: ProfileDepth }) {
                         {item.label}
                       </p>
                       <p className="text-xs text-[color:var(--almanac-ink-soft)]">
-                        {item.current} of {item.goal} · {item.note}
+                        {item.current} {item.current === 1 ? "activity" : "activities"}
                       </p>
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
@@ -626,103 +1292,334 @@ function WeeklyActionRow({
 }
 
 function CollegeCard({ college }: { college: CollegeListItem }) {
+  const [editing, setEditing] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const statusColor = statusColors[college.status] ?? "#9a9a9a";
+  const closed = closedStatuses.includes(
+    college.status as (typeof closedStatuses)[number],
+  );
+
+  // Submit an update with the current edit-form values plus a (possibly
+  // overridden) status. Used by both Save and the quick-action buttons.
+  function submitUpdate(form: HTMLFormElement, overrideStatus?: string) {
+    const formData = new FormData(form);
+    if (overrideStatus) formData.set("status", overrideStatus);
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateCollegeListEntry(formData);
+        setEditing(false);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Save failed.";
+        console.error("Update target failed:", err);
+        setError(message);
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm(`Delete "${college.name}"? This can't be undone.`)) return;
+    const fd = new FormData();
+    fd.set("id", college.id);
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteCollegeListEntry(fd);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Delete failed.";
+        console.error("Delete target failed:", err);
+        setError(message);
+      }
+    });
+  }
+
   return (
-    <article className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-            {college.location || "Location TBD"}
-          </p>
-          <h3 className="mt-1 font-serif text-2xl leading-tight">{college.name}</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-            {college.fitReason || "Add a fit note from a reflection or college-fit conversation."}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Pill>{college.status}</Pill>
-          <Pill>{college.priority} priority</Pill>
-          <Pill>{college.source === "conversation" ? "From conversation" : "Manual"}</Pill>
+    <article
+      className={[
+        "rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4 transition",
+        closed ? "opacity-70" : "",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h3
+          className={[
+            "font-serif text-2xl leading-tight",
+            closed ? "text-[color:var(--almanac-ink-soft)]" : "",
+          ].join(" ")}
+        >
+          {college.name}
+        </h3>
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className="rounded-full px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em]"
+            style={{ backgroundColor: `${statusColor}26`, color: statusColor }}
+          >
+            {college.status}
+          </span>
+          <button
+            className="text-[0.7rem] text-[color:var(--almanac-ink-soft)] underline transition hover:text-[color:var(--almanac-ink)]"
+            onClick={() => setEditing((v) => !v)}
+            type="button"
+          >
+            {editing ? "Close" : "Edit"}
+          </button>
         </div>
       </div>
 
-      <form action={updateCollegeListEntry} className="mt-4 grid gap-2 rounded-xl bg-white/35 p-3">
-        <input name="id" type="hidden" value={college.id} />
-        <TextInput name="name" placeholder="College name" required defaultValue={college.name} />
-        <div className="grid gap-2 md:grid-cols-2">
-          <TextInput name="location" placeholder="Location" defaultValue={college.location ?? ""} />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <SelectInput name="status" defaultValue={college.status}>
-              {collegeStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </SelectInput>
-            <SelectInput name="priority" defaultValue={college.priority}>
-              {collegePriorities.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </SelectInput>
-          </div>
-        </div>
-        <TextInput
-          name="fit_reason"
-          placeholder="Why this school might fit"
-          defaultValue={college.fitReason ?? ""}
-        />
-        <TextArea name="notes" placeholder="Notes from sessions, research, or counselor feedback" defaultValue={college.notes ?? ""} />
-        <button
-          className="h-10 rounded-lg border border-[color:var(--almanac-rule)] px-4 text-sm font-medium transition hover:bg-white/55"
-          type="submit"
+      {college.notes && !editing ? (
+        <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+          {college.notes}
+        </p>
+      ) : null}
+
+      {editing ? (
+        <form
+          className="mt-3 grid gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitUpdate(e.currentTarget);
+          }}
         >
-          Save changes
-        </button>
-      </form>
+          <input name="id" type="hidden" value={college.id} />
+          {/* DB still has these columns — pass through unchanged. */}
+          <input name="location" type="hidden" value={college.location ?? ""} />
+          <input name="fit_reason" type="hidden" value={college.fitReason ?? ""} />
+          <input name="priority" type="hidden" value={college.priority} />
+          {/* Status carries the current value; quick-action buttons override on click. */}
+          <input name="status" type="hidden" value={college.status} />
+
+          <input
+            className="h-9 rounded-lg border border-[color:var(--almanac-rule)] bg-white/65 px-3 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
+            defaultValue={college.name}
+            name="name"
+            placeholder="Target"
+            required
+          />
+          <textarea
+            className="min-h-[3.5rem] rounded-lg border border-[color:var(--almanac-rule)] bg-white/65 px-3 py-1.5 text-sm leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
+            defaultValue={college.notes ?? ""}
+            name="notes"
+            placeholder="Notes"
+            rows={2}
+          />
+
+          {/* Quick actions — each submits the form with that status applied. */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <button
+              className="h-8 rounded-md bg-[color:var(--almanac-ink)] px-2.5 text-[0.72rem] font-medium text-[color:var(--almanac-paper)] disabled:opacity-50"
+              disabled={isPending}
+              type="submit"
+            >
+              {isPending ? "Saving…" : "Save"}
+            </button>
+            <span className="ml-1 mr-1 h-4 w-px bg-[color:var(--almanac-rule)]" />
+            <QuickStatusButton
+              color={statusColors["Actualized"]}
+              disabled={isPending}
+              label="Actualized"
+              onClick={(e) => {
+                const form = (e.currentTarget as HTMLButtonElement).closest("form");
+                if (form) submitUpdate(form, "Actualized");
+              }}
+            />
+            <QuickStatusButton
+              color={statusColors["Getting Close"]}
+              disabled={isPending}
+              label="Getting Close"
+              onClick={(e) => {
+                const form = (e.currentTarget as HTMLButtonElement).closest("form");
+                if (form) submitUpdate(form, "Getting Close");
+              }}
+            />
+            <QuickStatusButton
+              color={statusColors["Set Aside For Now"]}
+              disabled={isPending}
+              label="Set Aside For Now"
+              onClick={(e) => {
+                const form = (e.currentTarget as HTMLButtonElement).closest("form");
+                if (form) submitUpdate(form, "Set Aside For Now");
+              }}
+            />
+            <button
+              className="h-8 rounded-md border border-[color:var(--almanac-clay)]/40 px-2.5 text-[0.72rem] font-medium text-[color:var(--almanac-clay)] transition hover:bg-[color:var(--almanac-clay)]/10 disabled:opacity-50"
+              disabled={isPending}
+              onClick={handleDelete}
+              type="button"
+            >
+              Delete
+            </button>
+          </div>
+
+          {error ? (
+            <p className="rounded-md bg-[color:var(--almanac-clay)]/15 px-2.5 py-1.5 text-[0.7rem] leading-5 text-[color:var(--almanac-clay)]">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
     </article>
   );
 }
 
+function QuickStatusButton({
+  color,
+  disabled,
+  label,
+  onClick,
+}: {
+  color: string;
+  disabled: boolean;
+  label: string;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      className="h-8 rounded-md border px-2.5 text-[0.72rem] font-medium transition disabled:opacity-50"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        borderColor: `${color}40`,
+        color,
+        backgroundColor: `${color}10`,
+      }}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
 function CollegeListForm() {
+  const [actionPlanDest, setActionPlanDest] = useState<"none" | "1year" | "longterm">("none");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const name = ((formData.get("name") as string) || "").trim();
+
+    // Capture the destination synchronously — startTransition runs the server
+    // action after this event handler returns, by which time the select state
+    // may already have been reset.
+    const dest = actionPlanDest;
+
+    setError(null);
+
+    startTransition(async () => {
+      try {
+        await createCollegeListEntry(formData);
+        if (dest !== "none" && name) {
+          addTargetToActionPlan(dest, name);
+        }
+        form.reset();
+        setActionPlanDest("none");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to add target.";
+        console.error("Add target failed:", err);
+        setError(message);
+      }
+    });
+  }
+
   return (
     <form
-      action={createCollegeListEntry}
       className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5"
+      onSubmit={handleSubmit}
     >
       <div className="flex items-center gap-2">
         <span className="flex size-8 items-center justify-center rounded-full bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]">
           <Plus size={15} />
         </span>
-        <h3 className="font-serif text-2xl leading-tight">Add college</h3>
+        <h3 className="font-serif text-2xl leading-tight">Add target</h3>
       </div>
-      <div className="mt-4 grid gap-2">
-        <TextInput name="name" placeholder="College name" required />
-        <TextInput name="location" placeholder="Location" />
-        <TextInput name="fit_reason" placeholder="Why it might fit" />
-        <div className="grid gap-2 sm:grid-cols-2">
-          <SelectInput name="status" defaultValue="Interested">
-            {collegeStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </SelectInput>
-          <SelectInput name="priority" defaultValue="Medium">
-            {collegePriorities.map((priority) => (
-              <option key={priority} value={priority}>
-                {priority}
-              </option>
-            ))}
-          </SelectInput>
+      <div className="mt-4 grid gap-2.5">
+        <TextInput
+          name="name"
+          placeholder="Target — school, role, program, skill, quality…"
+          required
+        />
+        <SelectInput defaultValue="Dream" name="status">
+          {activeStatuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </SelectInput>
+        <TextArea name="notes" placeholder="Notes (optional)" />
+
+        {/* Hidden fields — DB still has these columns; we just don't surface them. */}
+        <input name="location" type="hidden" value="" />
+        <input name="fit_reason" type="hidden" value="" />
+        <input name="priority" type="hidden" value="Medium" />
+
+        <div className="mt-1">
+          <p className="mb-1.5 text-[0.7rem] font-medium uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+            Also add to action plan?
+          </p>
+          <select
+            className="h-10 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/65 px-3 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
+            onChange={(e) =>
+              setActionPlanDest(e.target.value as "none" | "1year" | "longterm")
+            }
+            value={actionPlanDest}
+          >
+            <option value="none">No, just here</option>
+            <option value="1year">Yes — 1 Year action plan</option>
+            <option value="longterm">Yes — Long-term action plan</option>
+          </select>
         </div>
-        <TextArea name="notes" placeholder="Notes" />
-        <button className="h-10 rounded-lg bg-[color:var(--almanac-ink)] px-4 text-sm font-medium text-[color:var(--almanac-paper)]">
-          Add college
+
+        <button
+          className="h-10 rounded-lg bg-[color:var(--almanac-ink)] px-4 text-sm font-medium text-[color:var(--almanac-paper)] disabled:opacity-60"
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Adding…" : "Add target"}
         </button>
+
+        {error ? (
+          <p className="rounded-lg bg-[color:var(--almanac-clay)]/15 px-3 py-2 text-xs leading-5 text-[color:var(--almanac-clay)]">
+            {error}
+          </p>
+        ) : null}
       </div>
     </form>
   );
+}
+
+/**
+ * Write a manual item into the Action Plan's localStorage so the target shows
+ * up immediately in the chosen window. Mirrors the structure used by
+ * `ActionPlanView` in `almanac-workspace.tsx` (storage key `cultvr-action-plan-v3`).
+ */
+function addTargetToActionPlan(windowId: "1year" | "longterm", text: string) {
+  if (typeof window === "undefined") return;
+  const STORAGE_KEY = "cultvr-action-plan-v3";
+  type Item = { id: string; text: string; done: boolean };
+  type Store = Record<string, Record<string, Item[]>>;
+
+  let store: Store;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    store = raw ? (JSON.parse(raw) as Store) : {};
+  } catch {
+    store = {};
+  }
+
+  if (!store[windowId]) store[windowId] = { reaches: [], targets: [] };
+  if (!Array.isArray(store[windowId].targets)) store[windowId].targets = [];
+
+  store[windowId].targets.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    text,
+    done: false,
+  });
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
 function ReadinessCard({ area }: { area: ReadinessArea }) {
@@ -1193,15 +2090,15 @@ function buildReadinessAreas({
       progress: Math.min(100, 25 + recommendationPrep * 25),
     },
     {
-      label: "School list",
-      value: collegeList.length ? `${collegeList.length} schools in play` : "No schools yet",
-      detail: collegeList.length ? "Needs fit notes" : "Start with one fit-based school",
+      label: "Long-term targets",
+      value: collegeList.length ? `${collegeList.length} in play` : "None yet",
+      detail: collegeList.length ? "Add fit notes" : "Start with one fit-based target",
       progress: Math.min(100, collegeList.length * 12),
     },
     {
-      label: "Summer programs",
-      value: guidedSessions.length ? "1 idea in motion" : "No active plan yet",
-      detail: "Useful if it supports the story",
+      label: "Exploration",
+      value: guidedSessions.length ? "1 thread in motion" : "No active thread",
+      detail: "Programs, opportunities, or interests worth pursuing",
       progress: guidedSessions.length ? 45 : 20,
     },
   ];
@@ -1409,7 +2306,7 @@ function detectValueTag(text: string) {
 function normalizeCollegeStatus(status: string): CollegeListItem["status"] {
   return collegeStatuses.includes(status as CollegeListItem["status"])
     ? (status as CollegeListItem["status"])
-    : "Interested";
+    : "Dream";
 }
 
 function normalizeCollegePriority(priority: string): CollegeListItem["priority"] {

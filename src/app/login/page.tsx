@@ -20,34 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     >
       <PublicNav />
 
-      <section className="mx-auto grid min-h-[calc(100dvh-7rem)] w-full max-w-6xl items-start gap-8 py-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-10">
-        <div className="flex flex-col justify-center">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
-            Student workspace
-          </p>
-          <h1 className="mt-5 max-w-xl font-serif text-4xl leading-none tracking-tight text-[#1F2433] sm:text-5xl">
-            Continue your college planning.
-          </h1>
-          <p className="mt-4 max-w-lg text-base leading-7 text-[#1F2433]/65">
-            Sign in to review notes, organize activities and awards, prepare
-            essay work, and keep next steps clear.
-          </p>
-          <div className="mt-8 grid max-w-md grid-cols-3 gap-3 text-sm text-[#1F2433]/62">
-            <div className="border-l border-[#1F2433]/14 pl-3">
-              <p className="font-serif text-xl text-[#1F2433]">Voice</p>
-              <p className="mt-1">Resume reflections</p>
-            </div>
-            <div className="border-l border-[#1F2433]/14 pl-3">
-              <p className="font-serif text-xl text-[#1F2433]">Plan</p>
-              <p className="mt-1">Track next steps</p>
-            </div>
-            <div className="border-l border-[#1F2433]/14 pl-3">
-              <p className="font-serif text-xl text-[#1F2433]">Apply</p>
-              <p className="mt-1">Shape materials</p>
-            </div>
-          </div>
-        </div>
-
+      <section className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-lg items-center justify-center py-8 lg:py-10">
         <LoginAuthCard message={message} />
       </section>
     </main>

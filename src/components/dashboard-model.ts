@@ -1,7 +1,8 @@
 export type DashboardTab =
   | "continue"
   | "story-activities"
-  | "weekly-plan"
+  | "awards"
+  | "weekly-challenge"
   | "college-list"
   | "application-readiness";
 
@@ -53,7 +54,7 @@ export type CollegeListItem = {
   name: string;
   location: string | null;
   fitReason: string | null;
-  status: "Interested" | "Researching" | "Likely" | "Target" | "Reach" | "Applying" | "Archived";
+  status: "Dream" | "Reach" | "Match" | "Necessity" | "Getting Close" | "Actualized" | "Set Aside For Now";
   priority: "High" | "Medium" | "Low";
   notes: string | null;
   source: "manual" | "conversation" | "imported";
@@ -343,7 +344,7 @@ export const dashboardDemo: DashboardModel = {
       name: "Northeastern University",
       location: "Boston, MA",
       fitReason: "Strong co-op culture and applied project learning fit the robotics and design story.",
-      status: "Researching",
+      status: "Reach",
       priority: "High",
       notes: "Ask whether project-based engineering and urban campus feel energizing.",
       source: "conversation",
@@ -354,7 +355,7 @@ export const dashboardDemo: DashboardModel = {
       name: "Worcester Polytechnic Institute",
       location: "Worcester, MA",
       fitReason: "Hands-on engineering curriculum could support the maker/leadership theme.",
-      status: "Interested",
+      status: "Dream",
       priority: "Medium",
       notes: "Compare project requirements and student team culture.",
       source: "manual",

@@ -3,7 +3,9 @@ export type Note = {
   title: string;
   body: string;
   category: string;
+  activity_id: string | null;
   created_at: string;
+  updated_at?: string | null;
 };
 
 export type Goal = {
@@ -11,7 +13,21 @@ export type Goal = {
   title: string;
   status: string;
   target_date: string | null;
+  activity_id: string | null;
+  award_id: string | null;
   created_at: string;
+};
+
+export type WeeklyChallenge = {
+  id: string;
+  title: string;
+  category: string | null;
+  description: string | null;
+  week_start_date: string; // YYYY-MM-DD (always a Monday)
+  status: "active" | "completed" | "missed";
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type StudentTask = {
@@ -28,6 +44,18 @@ export type Activity = {
   role: string | null;
   impact: string | null;
   years: string | null;
+  category: string | null;
+  position: string | null;
+  description: string | null;
+  organization_description: string | null;
+  grades: string[];
+  start_date: string | null;
+  end_date: string | null;
+  in_progress: boolean;
+  hours_per_week: number;
+  weeks_per_year: number;
+  tags: string[];
+  sort_order: number;
   created_at: string;
 };
 
@@ -36,6 +64,13 @@ export type Award = {
   name: string;
   scope: string | null;
   year: string | null;
+  organization: string | null;
+  description: string | null;
+  requirements: string | null;
+  level: string | null;
+  activity_id: string | null;
+  tags: string[];
+  sort_order: number;
   created_at: string;
 };
 

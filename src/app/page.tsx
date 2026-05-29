@@ -1,70 +1,72 @@
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { LandingPlant } from "@/components/landing-plant";
-import { PublicNav } from "@/components/public-nav";
+import { RevealText } from "@/components/reveal-text";
 
 export default function Home() {
   return (
     <main
-      className="grid min-h-[100dvh] overflow-x-hidden bg-[#ECE6E0] px-5 py-6 text-[#1F2433] md:px-10 md:py-7"
+      className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-[#ECE6E0] px-5 text-[#1F2433]"
       style={{
         backgroundImage:
           "radial-gradient(rgba(31,36,51,0.18) 0.6px, transparent 0.6px), radial-gradient(rgba(31,36,51,0.18) 0.5px, transparent 0.5px)",
         backgroundPosition: "0 0, 7px 11px",
         backgroundSize: "14px 14px, 22px 22px",
-        gridTemplateRows: "auto 1fr auto",
       }}
     >
-      <PublicNav />
+      <div className="relative z-10 flex flex-col items-center text-center">
+        {/* Brand name */}
+        <h1 className="font-serif text-6xl italic tracking-tight text-[#1F2433] sm:text-7xl md:text-8xl">
+          Cultivr
+          <span className="text-[#C97A5D]">.</span>
+        </h1>
 
-      <section className="mx-auto grid w-full max-w-7xl items-center gap-8 py-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:px-5 md:py-8">
-        <div className="max-w-xl">
-          <p className="inline-flex items-center gap-3 font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
-            <span className="size-1.5 animate-pulse rounded-full bg-[#C97A5D]" />
-            College counseling workspace
-          </p>
-          <h1 className="mt-6 font-serif text-5xl leading-none text-[#1F2433] sm:text-6xl md:text-7xl lg:text-8xl">
-            Clear planning.
-            <br />
-            Stronger{" "}
-            <em className="italic text-[#3F4A66]">applications</em>.
-          </h1>
-          <p className="mt-6 max-w-md text-base leading-7 text-[#1F2433]/65">
-            Cultivr helps students and counselors keep activities, awards,
-            essays, goals, and follow-ups organized in one calm workspace.
-          </p>
-
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Link
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#1F2433] px-5 text-sm font-medium text-[#ECE6E0] transition hover:bg-[#0F1322]"
-              href="/login"
-            >
-              Start workspace
-              <ArrowRight size={16} />
-            </Link>
-            <Link
-              className="inline-flex h-12 items-center justify-center rounded-full border border-[#1F2433]/10 px-5 text-sm font-medium text-[#1F2433] transition hover:bg-[#1F2433]/5"
-              href="/about"
-            >
-              Learn more
-            </Link>
-          </div>
-        </div>
-
-        <div className="relative mx-auto flex aspect-square w-full max-w-[24rem] items-center justify-center md:max-w-[31rem]">
+        {/* Flower */}
+        <div className="relative mx-auto my-4 flex aspect-square w-full max-w-[14rem] items-center justify-center sm:my-6 sm:max-w-[17rem] md:max-w-[20rem]">
           <div className="absolute inset-[8%] rounded-full border border-dashed border-[#1F2433]/20" />
           <div className="absolute inset-[22%] rounded-full bg-[#DFD7CF]/60" />
           <LandingPlant />
         </div>
-      </section>
 
-      <footer className="border-t border-[#1F2433]/10 pt-4 font-mono text-xs uppercase tracking-[0.14em] text-[#1F2433]/60">
-        <div className="flex items-center gap-5">
-          <span>made for students</span>
-          <span className="h-px flex-1 bg-[#1F2433]/10" />
+        {/* Animated tagline */}
+        <div>
+          <RevealText
+            text="Small Steps. Big Momentum."
+            className="font-serif text-2xl italic leading-relaxed tracking-wide text-[#1F2433]/85 sm:text-3xl md:text-4xl"
+          />
         </div>
-      </footer>
+
+        {/* Sub-tagline */}
+        <p className="mt-5 flex items-center gap-3 font-mono text-xs uppercase tracking-[0.25em] text-[#1F2433]/45 sm:text-sm sm:tracking-[0.3em]">
+          <span>Track</span>
+          <span className="text-[#C97A5D]/60">•</span>
+          <span>Grow</span>
+          <span className="text-[#C97A5D]/60">•</span>
+          <span>Achieve</span>
+        </p>
+
+        {/* CTA */}
+        <Link
+          className="group mt-10 inline-flex items-center gap-2 rounded-full bg-[#1F2433] px-8 py-3.5 text-sm font-medium tracking-wide text-[#ECE6E0] transition-all duration-300 hover:bg-[#0F1322] hover:shadow-lg sm:mt-12 sm:px-10 sm:py-4 sm:text-base"
+          href="/login"
+        >
+          Begin Growth
+          <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">
+            ›
+          </span>
+        </Link>
+
+        {/* Sign in link */}
+        <p className="mt-5 text-sm text-[#1F2433]/40">
+          Already a member?{" "}
+          <Link
+            className="text-[#1F2433]/60 underline decoration-[#1F2433]/20 underline-offset-4 transition hover:text-[#1F2433] hover:decoration-[#1F2433]/40"
+            href="/login"
+          >
+            Log in
+          </Link>
+        </p>
+      </div>
     </main>
   );
 }

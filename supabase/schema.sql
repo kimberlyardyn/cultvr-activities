@@ -57,9 +57,15 @@ create table if not exists public.notes (
   title text not null,
   body text not null,
   category text not null default 'Reflection',
+  activity_id uuid references public.activities(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.notes
+  add column if not exists activity_id uuid references public.activities(id) on delete set null;
+
+create index if not exists notes_activity_id_idx on public.notes(activity_id);
 
 create table if not exists public.goals (
   id uuid primary key default gen_random_uuid(),
@@ -88,9 +94,31 @@ create table if not exists public.activities (
   role text,
   years text,
   impact text,
+  category text,
+  position text,
+  description text,
+  grades text[] not null default '{}'::text[],
+  start_date text,
+  end_date text,
+  in_progress boolean not null default false,
+  hours_per_week integer not null default 0,
+  weeks_per_year integer not null default 0,
+  tags text[] not null default '{}'::text[],
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.activities
+  add column if not exists category text,
+  add column if not exists position text,
+  add column if not exists description text,
+  add column if not exists grades text[] not null default '{}'::text[],
+  add column if not exists start_date text,
+  add column if not exists end_date text,
+  add column if not exists in_progress boolean not null default false,
+  add column if not exists hours_per_week integer not null default 0,
+  add column if not exists weeks_per_year integer not null default 0,
+  add column if not exists tags text[] not null default '{}'::text[];
 
 create table if not exists public.awards (
   id uuid primary key default gen_random_uuid(),
@@ -108,8 +136,8 @@ create table if not exists public.college_list (
   name text not null,
   location text,
   fit_reason text,
-  status text not null default 'Interested'
-    check (status in ('Interested', 'Researching', 'Likely', 'Target', 'Reach', 'Applying', 'Archived')),
+  status text not null default 'Dream'
+    check (status in ('Dream', 'Reach', 'Match', 'Necessity', 'Getting Close', 'Actualized', 'Set Aside For Now')),
   priority text not null default 'Medium'
     check (priority in ('High', 'Medium', 'Low')),
   notes text,

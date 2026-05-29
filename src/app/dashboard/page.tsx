@@ -15,6 +15,7 @@ import type {
   StudentAdmissionsProfile,
   StudentMemory,
   StudentTask,
+  WeeklyChallenge,
 } from "@/lib/types";
 
 const dashboardTabs = new Set([
@@ -56,6 +57,7 @@ export default async function DashboardPage({
     awards,
     collegeList,
     guidedSessions,
+    weeklyChallenges,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -78,14 +80,15 @@ export default async function DashboardPage({
       .limit(12),
     supabase
       .from("notes")
-      .select("id,title,body,category,created_at")
+      .select("id,title,body,category,activity_id,created_at,updated_at")
       .order("created_at", { ascending: false })
-      .limit(6),
+      .limit(200),
     supabase
       .from("goals")
-      .select("id,title,status,target_date,created_at")
+      .select("id,title,status,target_date,activity_id,award_id,created_at")
+      .order("target_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
-      .limit(6),
+      .limit(100),
     supabase
       .from("tasks")
       .select("id,title,status,due_date,created_at")
@@ -93,14 +96,18 @@ export default async function DashboardPage({
       .limit(8),
     supabase
       .from("activities")
-      .select("id,name,role,impact,years,created_at")
+      .select(
+        "id,name,role,impact,years,category,position,description,organization_description,grades,start_date,end_date,in_progress,hours_per_week,weeks_per_year,tags,sort_order,created_at",
+      )
+      .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(6),
+      .limit(50),
     supabase
       .from("awards")
-      .select("id,name,scope,year,created_at")
+      .select("id,name,scope,year,organization,description,requirements,level,activity_id,tags,sort_order,created_at")
+      .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(12),
+      .limit(50),
     supabase
       .from("college_list")
       .select(
@@ -115,6 +122,12 @@ export default async function DashboardPage({
       )
       .order("created_at", { ascending: false })
       .limit(4),
+    supabase
+      .from("weekly_challenges")
+      .select("id,title,category,description,week_start_date,status,completed_at,created_at,updated_at")
+      .order("week_start_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(60),
   ]);
 
   return (
@@ -129,6 +142,7 @@ export default async function DashboardPage({
       studentMemories={(studentMemories.data ?? []) as StudentMemory[]}
       studentProfile={(studentProfile.data ?? null) as StudentAdmissionsProfile | null}
       tasks={(tasks.data ?? []) as StudentTask[]}
+      weeklyChallenges={(weeklyChallenges.data ?? []) as WeeklyChallenge[]}
       userEmail={user.email ?? null}
       initialTab={initialTab}
     />

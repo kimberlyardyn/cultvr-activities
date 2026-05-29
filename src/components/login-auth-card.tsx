@@ -66,8 +66,12 @@ export function LoginAuthCard({ message }: LoginAuthCardProps) {
               ? "Create your workspace"
               : mode === "magic"
                 ? "Email yourself a link"
-                : "Welcome back"}
+                : "Your Workspace"}
           </h2>
+          <p className="mt-3 text-sm leading-6 text-[#1F2433]/55">
+            Sign in to review notes, organize activities and awards, strategize
+            next steps, and brainstorm narratives.
+          </p>
 
           <div className="mt-5 grid w-full grid-cols-3 rounded-full border border-[#1F2433]/10 bg-[#E4DDD4] p-1">
             {modes.map((item) => {
