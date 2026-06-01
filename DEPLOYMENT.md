@@ -1,4 +1,10 @@
-# Cultvr Deployment Guide
+# Cultvr Story Deployment Guide
+
+> Cultvr Story is deployed independently from `cultvr-activities`: its own
+> GitHub repo (`cultvr-story`), its own Vercel project, and its own Supabase
+> project (separate auth + database). Do not reuse the `cultvr-activities`
+> Supabase or Vercel project — create new ones so users, data, and billing
+> stay isolated.
 
 ## What I Need From You
 
@@ -17,7 +23,7 @@ Also confirm the production domain so I can add the right Supabase Auth redirect
 URL:
 
 ```text
-https://YOUR_DOMAIN/auth/callback
+https://cultvr-story.vercel.app/auth/callback
 ```
 
 ### 2. OpenAI
@@ -93,7 +99,7 @@ NEXT_PUBLIC_POSTHOG_HOST
 
 ```text
 http://localhost:3000/auth/callback
-https://YOUR_VERCEL_DOMAIN/auth/callback
+https://cultvr-story.vercel.app/auth/callback
 https://YOUR_CUSTOM_DOMAIN/auth/callback
 ```
 

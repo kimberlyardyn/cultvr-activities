@@ -1,7 +1,11 @@
-# Cultvr MVP
+# Cultvr Story
 
-Cultvr is a lightweight college counseling workspace for high school students.
-This MVP includes:
+Cultvr Story is a lightweight college counseling workspace for high school
+students, focused on helping them develop and tell their personal narrative.
+It is a separate deployment cloned from the Cultvr MVP (`cultvr-activities`)
+and runs on its own GitHub repo, Vercel project, and Supabase project.
+
+This app includes:
 
 - Landing page
 - Supabase email/password and magic-link auth
