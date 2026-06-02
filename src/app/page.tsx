@@ -21,7 +21,7 @@ export default function Home() {
           <span className="text-[#C97A5D]">.</span>
         </h1>
 
-        {/* Flower */}
+        {/* Branching mind-map tree */}
         <div className="relative mx-auto my-4 flex aspect-square w-full max-w-[14rem] items-center justify-center sm:my-6 sm:max-w-[17rem] md:max-w-[20rem]">
           <div className="absolute inset-[8%] rounded-full border border-dashed border-[#1F2433]/20" />
           <div className="absolute inset-[22%] rounded-full bg-[#DFD7CF]/60" />
@@ -31,18 +31,18 @@ export default function Home() {
         {/* Animated tagline */}
         <div>
           <RevealText
-            text="Small Steps. Big Momentum."
+            text="From Blank Page to Big Impact."
             className="font-serif text-2xl italic leading-relaxed tracking-wide text-[#1F2433]/85 sm:text-3xl md:text-4xl"
           />
         </div>
 
         {/* Sub-tagline */}
         <p className="mt-5 flex items-center gap-3 font-mono text-xs uppercase tracking-[0.25em] text-[#1F2433]/45 sm:text-sm sm:tracking-[0.3em]">
-          <span>Track</span>
+          <span>Spark</span>
           <span className="text-[#C97A5D]/60">•</span>
-          <span>Grow</span>
+          <span>Sharpen</span>
           <span className="text-[#C97A5D]/60">•</span>
-          <span>Achieve</span>
+          <span>Shine</span>
         </p>
 
         {/* CTA */}
