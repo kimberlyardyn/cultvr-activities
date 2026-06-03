@@ -42,6 +42,7 @@ export async function buildStudentSessionContext(
     activities,
     awards,
     collegeList,
+    adminInstructions,
   ] = await Promise.all([
     maybeSingle<StudentAdmissionsProfile>(
       supabase,
@@ -87,6 +88,7 @@ export async function buildStudentSessionContext(
       userId,
       12,
     ),
+    fetchGlobalAdminInstructions(supabase),
   ]);
 
   return {
@@ -99,7 +101,28 @@ export async function buildStudentSessionContext(
     activities,
     awards,
     collegeList,
+    adminInstructions,
   };
+}
+
+// Global administrator guidance, shared across all students. Read under the
+// student's own session (RLS allows authenticated reads) and injected into the
+// AI prompt for both chat and the voice coach.
+async function fetchGlobalAdminInstructions(supabase: SupabaseLike): Promise<string> {
+  try {
+    const query = supabase
+      .from("admin_ai_instructions")
+      .select("content,created_at") as QueryBuilder<{ content: string }>;
+    const ordered = query.order?.("created_at", { ascending: true });
+    const result = await ordered?.limit?.(25);
+    const rows = result?.data ?? [];
+    return rows
+      .map((row) => row.content?.trim())
+      .filter(Boolean)
+      .join("\n\n");
+  } catch {
+    return "";
+  }
 }
 
 export function createPersonalizedSessionPlan({
@@ -164,11 +187,17 @@ export function createPersonalizedSessionPlan({
   };
 }
 
-export function buildRealtimeInstructions(plan: PersonalizedSessionPlan) {
+export function buildRealtimeInstructions(
+  plan: PersonalizedSessionPlan,
+  adminInstructions = "",
+) {
   return compactText(
     [
       "You are Cultvr, a concise college counseling voice coach for a high school student.",
       "Do not claim to be a licensed counselor or mental health professional.",
+      adminInstructions
+        ? `Administrator guidance you must follow: ${adminInstructions}`
+        : "",
       `Selected session: ${plan.sessionTitle}.`,
       plan.sessionFocus ? `Session focus: ${plan.sessionFocus}.` : "",
       `Start with this question: ${plan.openingPrompt}`,

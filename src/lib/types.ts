@@ -144,6 +144,16 @@ export type StudentSessionContext = {
   activities: Activity[];
   awards: Award[];
   collegeList: CollegeListEntry[];
+  adminInstructions: string;
+};
+
+export type AdminInstruction = {
+  id: string;
+  source: "text" | "document";
+  title: string | null;
+  content: string;
+  file_name: string | null;
+  created_at: string;
 };
 
 export type PersonalizedSessionPlan = {

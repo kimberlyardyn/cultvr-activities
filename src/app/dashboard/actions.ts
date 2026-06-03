@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { isAdminEmail } from "@/lib/env";
 import {
   CURRENT_PRIORITY_VALUES,
   USER_IDENTITY_VALUES,
 } from "@/lib/student-profile";
 import { deriveMemoriesFromSession } from "@/lib/student-context";
 import { createClient } from "@/lib/supabase/server";
+import type { AdminInstruction } from "@/lib/types";
 
 const noteSchema = z.object({
   title: z.string().min(2).max(120),
@@ -1057,4 +1059,103 @@ export async function uploadDocument(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
+}
+
+// ── Administrator: global AI instructions ────────────────────────────────────
+
+const adminTextInstructionSchema = z.object({
+  title: z.string().max(120).optional(),
+  content: z.string().min(2).max(8000),
+});
+
+async function getAdminContext() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  if (!isAdminEmail(user.email)) return null;
+  return { supabase, user };
+}
+
+export async function listAdminInstructions(): Promise<{
+  isAdmin: boolean;
+  items: AdminInstruction[];
+}> {
+  const admin = await getAdminContext();
+  if (!admin) return { isAdmin: false, items: [] };
+
+  const { data } = await admin.supabase
+    .from("admin_ai_instructions")
+    .select("id,source,title,content,file_name,created_at")
+    .order("created_at", { ascending: false });
+
+  return { isAdmin: true, items: (data ?? []) as AdminInstruction[] };
+}
+
+export async function addAdminTextInstruction(
+  input: z.input<typeof adminTextInstructionSchema>,
+) {
+  const admin = await getAdminContext();
+  if (!admin) return { ok: false as const, error: "Not authorized." };
+
+  const parsed = adminTextInstructionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: "Please enter instruction text." };
+  }
+
+  const { error } = await admin.supabase.from("admin_ai_instructions").insert({
+    source: "text",
+    title: parsed.data.title?.trim() || null,
+    content: parsed.data.content.trim(),
+    created_by: admin.user.id,
+  });
+
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
+export async function addAdminDocumentInstruction(formData: FormData) {
+  const admin = await getAdminContext();
+  if (!admin) return { ok: false as const, error: "Not authorized." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false as const, error: "Choose a PDF, DOCX, or TXT file." };
+  }
+
+  const extracted = await extractFileText(file);
+  if (extracted.error) return { ok: false as const, error: extracted.error };
+  const content = extracted.text?.trim();
+  if (!content) {
+    return { ok: false as const, error: "No readable text found in that file." };
+  }
+
+  const title = value(formData, "title");
+  const { error } = await admin.supabase.from("admin_ai_instructions").insert({
+    source: "document",
+    title: title || null,
+    content: content.slice(0, 8000),
+    file_name: file.name,
+    created_by: admin.user.id,
+  });
+
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
+export async function deleteAdminInstruction(id: string) {
+  const admin = await getAdminContext();
+  if (!admin) return { ok: false as const, error: "Not authorized." };
+
+  const { error } = await admin.supabase
+    .from("admin_ai_instructions")
+    .delete()
+    .eq("id", id);
+
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const };
 }

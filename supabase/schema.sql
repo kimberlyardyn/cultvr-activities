@@ -156,6 +156,17 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_ai_instructions (
+  id uuid primary key default gen_random_uuid(),
+  source text not null default 'text' check (source in ('text', 'document')),
+  title text,
+  content text not null,
+  file_name text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.guided_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
@@ -277,6 +288,7 @@ alter table public.activities enable row level security;
 alter table public.awards enable row level security;
 alter table public.college_list enable row level security;
 alter table public.documents enable row level security;
+alter table public.admin_ai_instructions enable row level security;
 alter table public.guided_sessions enable row level security;
 alter table public.guided_session_answers enable row level security;
 alter table public.guided_session_turns enable row level security;
@@ -308,6 +320,19 @@ create policy "student_memories_all_own"
 on public.student_memories for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+drop policy if exists "admin_ai_instructions_read" on public.admin_ai_instructions;
+create policy "admin_ai_instructions_read"
+on public.admin_ai_instructions for select
+to authenticated
+using (true);
+
+drop policy if exists "admin_ai_instructions_admin_write" on public.admin_ai_instructions;
+create policy "admin_ai_instructions_admin_write"
+on public.admin_ai_instructions for all
+to authenticated
+using (lower(auth.jwt() ->> 'email') = 'savantseal@gmail.com')
+with check (lower(auth.jwt() ->> 'email') = 'savantseal@gmail.com');
 
 drop policy if exists "notes_all_own" on public.notes;
 create policy "notes_all_own"

@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   }
 
   let context = "";
+  let adminInstructions = "";
 
   if (hasSupabaseEnv()) {
     const supabase = await createClient();
@@ -43,9 +44,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    context = formatStudentContextForPrompt(
-      await buildStudentSessionContext(supabase, user.id),
-    );
+    const studentContext = await buildStudentSessionContext(supabase, user.id);
+    context = formatStudentContextForPrompt(studentContext);
+    adminInstructions = studentContext.adminInstructions;
   }
 
   const openai = getOpenAI();
@@ -60,7 +61,10 @@ export async function POST(request: Request) {
       {
         role: "system",
         content:
-          "You are Cultvr, a concise college counseling assistant for high school students. Personalize responses from the saved student context. Help students reflect, identify concrete achievements, shape goals, and define next tasks. Avoid inventing credentials, outcomes, or personal traits. Ask one useful follow-up when needed. Keep answers structured and under 180 words.",
+          "You are Cultvr, a concise college counseling assistant for high school students. Personalize responses from the saved student context. Help students reflect, identify concrete achievements, shape goals, and define next tasks. Avoid inventing credentials, outcomes, or personal traits. Ask one useful follow-up when needed. Keep answers structured and under 180 words." +
+          (adminInstructions
+            ? `\n\nAdministrator guidance you must follow:\n${adminInstructions}`
+            : ""),
       },
       {
         role: "user",

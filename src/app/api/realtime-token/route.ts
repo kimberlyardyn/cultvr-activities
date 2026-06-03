@@ -61,7 +61,7 @@ async function createRealtimeToken(sessionRequest: z.infer<typeof requestSchema>
       sessionTitle: sessionRequest.sessionTitle ?? "Open college planning session",
     });
 
-    instructions = buildRealtimeInstructions(plan);
+    instructions = buildRealtimeInstructions(plan, studentContext.adminInstructions);
     questionPlan = plan;
   }
 

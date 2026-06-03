@@ -27,6 +27,7 @@ import {
   updateProfilePreferences,
   updateStudentAdmissionsProfile,
 } from "@/app/dashboard/actions";
+import { AdminInstructionsSection } from "@/components/admin-instructions-section";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -803,6 +804,9 @@ function PrefsPopup({
           </button>
         </div>
       </details>
+
+      {/* AI instructions — renders only for the administrator account */}
+      <AdminInstructionsSection />
 
       {/* Layout */}
       <div className="flex items-center justify-between border-t border-[color:var(--almanac-rule)] py-3.5">
