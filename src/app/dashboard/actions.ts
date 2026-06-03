@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import {
+  CURRENT_PRIORITY_VALUES,
+  USER_IDENTITY_VALUES,
+} from "@/lib/student-profile";
 import { deriveMemoriesFromSession } from "@/lib/student-context";
 import { createClient } from "@/lib/supabase/server";
 
@@ -91,13 +95,11 @@ const profilePreferencesSchema = z.object({
 });
 
 const studentAdmissionsProfileSchema = z.object({
+  dateOfBirth: z.string().max(10).optional(),
+  userIdentity: z.enum(USER_IDENTITY_VALUES).or(z.literal("")).optional(),
+  location: z.string().max(120).optional(),
   gradeLevel: z.string().max(60).optional(),
-  applicationStage: z.string().max(120).optional(),
-  intendedMajors: z.array(z.string().max(80)).max(12).optional(),
-  interests: z.array(z.string().max(80)).max(16).optional(),
-  currentPriorities: z.array(z.string().max(120)).max(10).optional(),
-  targetColleges: z.array(z.string().max(120)).max(20).optional(),
-  importantDeadlines: z.string().max(1000).optional(),
+  currentPriority: z.enum(CURRENT_PRIORITY_VALUES).or(z.literal("")).optional(),
   coachingStyle: z.enum(["direct", "encouraging", "structured", "exploratory"]).optional(),
   personalityNotes: z.string().max(1200).optional(),
 });
@@ -1006,19 +1008,14 @@ export async function updateStudentAdmissionsProfile(
   const { supabase, user } = await requireUser();
   const parsed = studentAdmissionsProfileSchema.parse(input);
 
-  const cleanList = (items: string[] | undefined) =>
-    (items ?? []).map((item) => item.trim()).filter(Boolean);
-
   const { error } = await supabase.from("student_admissions_profiles").upsert(
     {
       user_id: user.id,
+      date_of_birth: parsed.dateOfBirth?.trim() || null,
+      user_identity: parsed.userIdentity || null,
+      location: parsed.location?.trim() || null,
       grade_level: parsed.gradeLevel?.trim() || null,
-      application_stage: parsed.applicationStage?.trim() || null,
-      intended_majors: cleanList(parsed.intendedMajors),
-      interests: cleanList(parsed.interests),
-      current_priorities: cleanList(parsed.currentPriorities),
-      target_colleges: cleanList(parsed.targetColleges),
-      important_deadlines: parsed.importantDeadlines?.trim() || null,
+      current_priority: parsed.currentPriority || null,
       coaching_style: parsed.coachingStyle ?? "encouraging",
       personality_notes: parsed.personalityNotes?.trim() || null,
       updated_at: new Date().toISOString(),

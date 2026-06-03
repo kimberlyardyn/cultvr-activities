@@ -1,3 +1,5 @@
+import type { CurrentPriority, UserIdentity } from "@/lib/student-profile";
+
 export type Note = {
   id: string;
   title: string;
@@ -100,13 +102,11 @@ export type ProfilePreferences = {
 
 export type StudentAdmissionsProfile = {
   user_id: string;
+  date_of_birth: string | null;
+  user_identity: UserIdentity | null;
+  location: string | null;
   grade_level: string | null;
-  application_stage: string | null;
-  intended_majors: string[];
-  interests: string[];
-  current_priorities: string[];
-  target_colleges: string[];
-  important_deadlines: string | null;
+  current_priority: CurrentPriority | null;
   coaching_style: "direct" | "encouraging" | "structured" | "exploratory";
   personality_notes: string | null;
   created_at: string;

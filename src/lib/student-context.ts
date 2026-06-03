@@ -11,6 +11,7 @@ import type {
   StudentSessionContext,
   StudentTask,
 } from "@/lib/types";
+import { currentPriorityLabel, userIdentityLabel } from "@/lib/student-profile";
 
 type SupabaseLike = {
   from: (table: string) => {
@@ -45,7 +46,7 @@ export async function buildStudentSessionContext(
     maybeSingle<StudentAdmissionsProfile>(
       supabase,
       "student_admissions_profiles",
-      "user_id,grade_level,application_stage,intended_majors,interests,current_priorities,target_colleges,important_deadlines,coaching_style,personality_notes,created_at,updated_at",
+      "user_id,date_of_birth,user_identity,location,grade_level,current_priority,coaching_style,personality_notes,created_at,updated_at",
       userId,
     ),
     maybeMany<StudentMemory>(
@@ -116,8 +117,9 @@ export function createPersonalizedSessionPlan({
 }): PersonalizedSessionPlan {
   const profile = context.profile;
   const topMemories = context.memories.slice(0, 5);
-  const currentPriority = firstUseful(profile?.current_priorities);
-  const strongestInterest = firstUseful(profile?.interests) ?? firstUseful(profile?.intended_majors);
+  const currentPriority = currentPriorityLabel(profile?.current_priority);
+  const strongestInterest =
+    firstMemoryLabel(topMemories, ["theme", "essay_seed"]) ?? null;
   const activityGap = context.activities.find((activity) => !activity.impact?.trim());
   const schoolGap = context.collegeList.find((college) => !college.fit_reason?.trim());
   const latestSession = context.recentSessions[0];
@@ -183,15 +185,13 @@ export function formatStudentContextForPrompt(context: StudentSessionContext) {
   const profile = context.profile;
   const profileText = profile
     ? [
+        profile.user_identity ? `Identity: ${userIdentityLabel(profile.user_identity)}` : "",
+        profile.date_of_birth ? `Date of birth: ${profile.date_of_birth}` : "",
+        profile.location ? `Location: ${profile.location}` : "",
         profile.grade_level ? `Grade/year: ${profile.grade_level}` : "",
-        profile.application_stage ? `Stage: ${profile.application_stage}` : "",
-        profile.intended_majors.length ? `Majors: ${profile.intended_majors.join(", ")}` : "",
-        profile.interests.length ? `Interests: ${profile.interests.join(", ")}` : "",
-        profile.current_priorities.length
-          ? `Current priorities: ${profile.current_priorities.join(", ")}`
+        profile.current_priority
+          ? `Current priority: ${currentPriorityLabel(profile.current_priority)}`
           : "",
-        profile.target_colleges.length ? `Target colleges: ${profile.target_colleges.join(", ")}` : "",
-        profile.important_deadlines ? `Deadlines: ${profile.important_deadlines}` : "",
         `Coaching style: ${profile.coaching_style}`,
         profile.personality_notes ? `Student preferences: ${profile.personality_notes}` : "",
       ]
@@ -412,8 +412,12 @@ function compactText(text: string, limit: number) {
   return cleaned.length <= limit ? cleaned : `${cleaned.slice(0, limit - 3).trimEnd()}...`;
 }
 
-function firstUseful(items: string[] | null | undefined) {
-  return items?.find((item) => item.trim()) ?? null;
+function firstMemoryLabel(
+  memories: StudentMemory[],
+  types: StudentMemory["memory_type"][],
+) {
+  const match = memories.find((memory) => types.includes(memory.memory_type));
+  return match?.label?.trim() || null;
 }
 
 function hasAny(text: string, keywords: string[]) {

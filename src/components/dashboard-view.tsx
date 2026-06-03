@@ -39,6 +39,7 @@ import type {
   StudentTask,
   WeeklyChallenge,
 } from "@/lib/types";
+import { currentPriorityLabel } from "@/lib/student-profile";
 import { formatDate } from "@/lib/utils";
 
 type DashboardViewProps = {
@@ -356,24 +357,19 @@ function ProgressTab({
     (s) => s.interaction_mode === "voice" || s.interaction_mode === "mixed",
   ).length;
 
-  const hasMajors = (studentProfile?.intended_majors?.length ?? 0) > 0;
-  const hasInterests = (studentProfile?.interests?.length ?? 0) > 0;
+  const hasPriority = Boolean(studentProfile?.current_priority);
+  const priorityLabel = currentPriorityLabel(studentProfile?.current_priority);
   const themeMemory = studentMemories.find(
     (m) => m.memory_type === "theme" || m.memory_type === "essay_seed",
   );
-  const directionIdentified = hasMajors || hasInterests || Boolean(themeMemory);
+  const directionIdentified = hasPriority || Boolean(themeMemory);
   const directionLabel = directionIdentified
-    ? studentProfile?.intended_majors?.[0] ||
-      studentProfile?.interests?.[0] ||
-      themeMemory?.label ||
-      "Emerging"
+    ? priorityLabel || themeMemory?.label || "Emerging"
     : "Not yet";
   const directionDetail = directionIdentified
-    ? hasMajors
-      ? "academic major identified"
-      : hasInterests
-        ? "interest area identified"
-        : "theme surfacing in sessions"
+    ? hasPriority
+      ? "current priority set"
+      : "theme surfacing in sessions"
     : "explore in sessions to surface one";
 
   // Resume / application list readiness — derived from activity quality.

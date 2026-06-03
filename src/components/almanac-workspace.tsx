@@ -44,6 +44,12 @@ import type {
   StudentTask,
   WeeklyChallenge,
 } from "@/lib/types";
+import {
+  CURRENT_PRIORITY_OPTIONS,
+  USER_IDENTITY_OPTIONS,
+  type CurrentPriority,
+  type UserIdentity,
+} from "@/lib/student-profile";
 import { formatDate } from "@/lib/utils";
 
 type Tab =
@@ -229,13 +235,11 @@ export function AlmanacWorkspace({
     const now = new Date().toISOString();
     setAdmissionsProfileState((current) => ({
       user_id: current?.user_id ?? "",
+      date_of_birth: value.dateOfBirth?.trim() || null,
+      user_identity: value.userIdentity || null,
+      location: value.location?.trim() || null,
       grade_level: value.gradeLevel?.trim() || null,
-      application_stage: value.applicationStage?.trim() || null,
-      intended_majors: value.intendedMajors ?? [],
-      interests: value.interests ?? [],
-      current_priorities: value.currentPriorities ?? [],
-      target_colleges: value.targetColleges ?? [],
-      important_deadlines: value.importantDeadlines?.trim() || null,
+      current_priority: value.currentPriority || null,
       coaching_style: value.coachingStyle ?? "encouraging",
       personality_notes: value.personalityNotes?.trim() || null,
       created_at: current?.created_at ?? now,
@@ -499,22 +503,14 @@ function PrefsPopup({
   const [nameInput, setNameInput] = useState(customName);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [studentSaveState, setStudentSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [dateOfBirth, setDateOfBirth] = useState(studentProfile?.date_of_birth ?? "");
+  const [userIdentity, setUserIdentity] = useState<UserIdentity | "">(
+    studentProfile?.user_identity ?? "",
+  );
+  const [location, setLocation] = useState(studentProfile?.location ?? "");
   const [gradeLevel, setGradeLevel] = useState(studentProfile?.grade_level ?? "");
-  const [applicationStage, setApplicationStage] = useState(
-    studentProfile?.application_stage ?? "",
-  );
-  const [intendedMajors, setIntendedMajors] = useState(
-    listToInput(studentProfile?.intended_majors),
-  );
-  const [interests, setInterests] = useState(listToInput(studentProfile?.interests));
-  const [currentPriorities, setCurrentPriorities] = useState(
-    listToInput(studentProfile?.current_priorities),
-  );
-  const [targetColleges, setTargetColleges] = useState(
-    listToInput(studentProfile?.target_colleges),
-  );
-  const [importantDeadlines, setImportantDeadlines] = useState(
-    studentProfile?.important_deadlines ?? "",
+  const [currentPriority, setCurrentPriority] = useState<CurrentPriority | "">(
+    studentProfile?.current_priority ?? "",
   );
   const [coachingStyle, setCoachingStyle] = useState<
     "direct" | "encouraging" | "structured" | "exploratory"
@@ -535,13 +531,11 @@ function PrefsPopup({
   const [lastSeenStudentProfile, setLastSeenStudentProfile] = useState(studentProfile);
   if (lastSeenStudentProfile !== studentProfile) {
     setLastSeenStudentProfile(studentProfile);
+    setDateOfBirth(studentProfile?.date_of_birth ?? "");
+    setUserIdentity(studentProfile?.user_identity ?? "");
+    setLocation(studentProfile?.location ?? "");
     setGradeLevel(studentProfile?.grade_level ?? "");
-    setApplicationStage(studentProfile?.application_stage ?? "");
-    setIntendedMajors(listToInput(studentProfile?.intended_majors));
-    setInterests(listToInput(studentProfile?.interests));
-    setCurrentPriorities(listToInput(studentProfile?.current_priorities));
-    setTargetColleges(listToInput(studentProfile?.target_colleges));
-    setImportantDeadlines(studentProfile?.important_deadlines ?? "");
+    setCurrentPriority(studentProfile?.current_priority ?? "");
     setCoachingStyle(studentProfile?.coaching_style ?? "encouraging");
     setPersonalityNotes(studentProfile?.personality_notes ?? "");
   }
@@ -563,15 +557,13 @@ function PrefsPopup({
     setStudentSaveState("saving");
     try {
       await setStudentProfile({
-        applicationStage,
-        coachingStyle,
-        currentPriorities: inputToList(currentPriorities),
+        dateOfBirth,
+        userIdentity,
+        location,
         gradeLevel,
-        importantDeadlines,
-        intendedMajors: inputToList(intendedMajors),
-        interests: inputToList(interests),
+        currentPriority,
+        coachingStyle,
         personalityNotes,
-        targetColleges: inputToList(targetColleges),
       });
       setStudentSaveState("saved");
       setTimeout(() => setStudentSaveState("idle"), 1400);
@@ -737,46 +729,37 @@ function PrefsPopup({
         </summary>
         <div className="mt-3 grid gap-2.5">
           <SettingsInput
+            label="Date of birth"
+            onChange={setDateOfBirth}
+            placeholder=""
+            type="date"
+            value={dateOfBirth}
+          />
+          <SettingsSelect
+            label="User identity"
+            onChange={(v) => setUserIdentity(v as UserIdentity | "")}
+            options={USER_IDENTITY_OPTIONS}
+            placeholder="Select identity"
+            value={userIdentity}
+          />
+          <SettingsInput
+            label="Location"
+            onChange={setLocation}
+            placeholder="City, State / Country"
+            value={location}
+          />
+          <SettingsInput
             label="Grade/year"
             onChange={setGradeLevel}
             placeholder="11th grade"
             value={gradeLevel}
           />
-          <SettingsInput
-            label="Application stage"
-            onChange={setApplicationStage}
-            placeholder="Exploring, drafting, applying..."
-            value={applicationStage}
-          />
-          <SettingsInput
-            label="Interests"
-            onChange={setInterests}
-            placeholder="robotics, policy, design"
-            value={interests}
-          />
-          <SettingsInput
-            label="Possible majors"
-            onChange={setIntendedMajors}
-            placeholder="engineering, computer science"
-            value={intendedMajors}
-          />
-          <SettingsInput
-            label="Current priorities"
-            onChange={setCurrentPriorities}
-            placeholder="essay ideas, activity descriptions"
-            value={currentPriorities}
-          />
-          <SettingsInput
-            label="Colleges"
-            onChange={setTargetColleges}
-            placeholder="UC Berkeley, Northeastern"
-            value={targetColleges}
-          />
-          <SettingsTextArea
-            label="Deadlines"
-            onChange={setImportantDeadlines}
-            placeholder="Early action by Nov 1; UC by Dec 1"
-            value={importantDeadlines}
+          <SettingsSelect
+            label="Current priority"
+            onChange={(v) => setCurrentPriority(v as CurrentPriority | "")}
+            options={CURRENT_PRIORITY_OPTIONS}
+            placeholder="Select priority"
+            value={currentPriority}
           />
           <div>
             <p className="mb-1.5 text-[0.72rem] font-medium text-[color:var(--almanac-ink-soft)]">
@@ -852,11 +835,13 @@ function SettingsInput({
   label,
   onChange,
   placeholder,
+  type = "text",
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
   placeholder: string;
+  type?: "text" | "date";
   value: string;
 }) {
   return (
@@ -868,8 +853,43 @@ function SettingsInput({
         className="h-9 rounded-lg border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 text-[0.82rem] text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[color:var(--almanac-olive)]"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        type={type}
         value={value}
       />
+    </label>
+  );
+}
+
+function SettingsSelect({
+  label,
+  onChange,
+  options,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-[0.72rem] font-medium text-[color:var(--almanac-ink-soft)]">
+        {label}
+      </span>
+      <select
+        className="h-9 rounded-lg border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 text-[0.82rem] text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -900,16 +920,6 @@ function SettingsTextArea({
   );
 }
 
-function inputToList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function listToInput(value: string[] | null | undefined) {
-  return value?.join(", ") ?? "";
-}
 
 function TopBar({
   tab,

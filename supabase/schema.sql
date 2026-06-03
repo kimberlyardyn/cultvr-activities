@@ -37,13 +37,11 @@ alter table public.profiles
 
 create table if not exists public.student_admissions_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade default auth.uid(),
+  date_of_birth date,
+  user_identity text,
+  location text,
   grade_level text,
-  application_stage text,
-  intended_majors text[] not null default '{}'::text[],
-  interests text[] not null default '{}'::text[],
-  current_priorities text[] not null default '{}'::text[],
-  target_colleges text[] not null default '{}'::text[],
-  important_deadlines text,
+  current_priority text,
   coaching_style text not null default 'encouraging'
     check (coaching_style in ('direct', 'encouraging', 'structured', 'exploratory')),
   personality_notes text,

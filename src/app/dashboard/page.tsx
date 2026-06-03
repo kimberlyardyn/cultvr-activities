@@ -67,7 +67,7 @@ export default async function DashboardPage({
     supabase
       .from("student_admissions_profiles")
       .select(
-        "user_id,grade_level,application_stage,intended_majors,interests,current_priorities,target_colleges,important_deadlines,coaching_style,personality_notes,created_at,updated_at",
+        "user_id,date_of_birth,user_identity,location,grade_level,current_priority,coaching_style,personality_notes,created_at,updated_at",
       )
       .eq("user_id", user.id)
       .maybeSingle(),
