@@ -26,6 +26,7 @@ import {
   tagNoteToActivity,
   updateActivity,
   type ExtractedActivity,
+  type ExtractedAward,
 } from "@/app/dashboard/actions";
 import {
   ActivityVoiceCoach,
@@ -1249,14 +1250,16 @@ function SelectInput({
 // ============================================================================
 
 type ReviewActivity = ExtractedActivity & { _include: boolean };
+type ReviewAward = ExtractedAward & { _include: boolean };
 
 function ResumeImportModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<"input" | "review">("input");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<number | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [reviewItems, setReviewItems] = useState<ReviewActivity[]>([]);
+  const [reviewAwards, setReviewAwards] = useState<ReviewAward[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const handleFile = useCallback(async (picked: File) => {
@@ -1290,6 +1293,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
       const res = await parseActivitiesFromText(fd);
       if (res.ok) {
         setReviewItems(res.activities.map((a) => ({ ...a, _include: true })));
+        setReviewAwards(res.awards.map((a) => ({ ...a, _include: true })));
         setStep("review");
       } else {
         setError(res.error);
@@ -1299,26 +1303,35 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
 
   // Step 2: commit the included (and possibly edited) items.
   const handleCommit = useCallback(() => {
-    const chosen = reviewItems
+    const chosenActivities = reviewItems
       .filter((a) => a._include && a.name?.trim())
       .map(({ _include, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
-    if (!chosen.length) {
-      setError("Select at least one activity to import.");
+    const chosenAwards = reviewAwards
+      .filter((a) => a._include && a.name?.trim())
+      .map(({ _include, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
+    if (!chosenActivities.length && !chosenAwards.length) {
+      setError("Select at least one item to import.");
       return;
     }
     setError(null);
     const fd = new FormData();
-    fd.set("activities", JSON.stringify(chosen));
+    fd.set("activities", JSON.stringify(chosenActivities));
+    fd.set("awards", JSON.stringify(chosenAwards));
     startTransition(async () => {
       const res = await commitImportedActivities(fd);
       if (res.ok) {
-        setSuccess(res.count);
+        const parts: string[] = [];
+        if (res.activityCount)
+          parts.push(`${res.activityCount} ${res.activityCount === 1 ? "activity" : "activities"}`);
+        if (res.awardCount)
+          parts.push(`${res.awardCount} ${res.awardCount === 1 ? "award" : "awards"}`);
+        setSuccess(`Imported ${parts.join(" and ")}. Closing…`);
         setTimeout(() => onClose(), 1400);
       } else {
         setError(res.error);
       }
     });
-  }, [reviewItems, onClose]);
+  }, [reviewItems, reviewAwards, onClose]);
 
   function updateItem(index: number, patch: Partial<ReviewActivity>) {
     setReviewItems((prev) =>
@@ -1326,7 +1339,15 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const includedCount = reviewItems.filter((a) => a._include).length;
+  function updateAward(index: number, patch: Partial<ReviewAward>) {
+    setReviewAwards((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  }
+
+  const includedCount =
+    reviewItems.filter((a) => a._include).length +
+    reviewAwards.filter((a) => a._include).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
@@ -1338,7 +1359,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
             </h3>
             <p className="text-xs text-[color:var(--almanac-ink-soft)]">
               {step === "input"
-                ? "Paste your resume or activities list. We'll parse it into structured entries you can review."
+                ? "Paste your resume or activities list. We'll detect both activities and awards into structured entries you can review."
                 : "Edit anything, then choose which to import. Nothing is saved until you click Import."}
             </p>
           </div>
@@ -1411,23 +1432,25 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
           <div className="grid gap-3 px-6 py-5">
             <div className="flex items-center justify-between">
               <p className="text-xs text-[color:var(--almanac-ink-soft)]">
-                {includedCount} of {reviewItems.length} selected
+                {includedCount} of {reviewItems.length + reviewAwards.length} selected
               </p>
               <div className="flex gap-3 text-[0.7rem]">
                 <button
                   className="text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)]"
-                  onClick={() =>
-                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: true })))
-                  }
+                  onClick={() => {
+                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: true })));
+                    setReviewAwards((prev) => prev.map((a) => ({ ...a, _include: true })));
+                  }}
                   type="button"
                 >
                   Select all
                 </button>
                 <button
                   className="text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)]"
-                  onClick={() =>
-                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: false })))
-                  }
+                  onClick={() => {
+                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: false })));
+                    setReviewAwards((prev) => prev.map((a) => ({ ...a, _include: false })));
+                  }}
                   type="button"
                 >
                   Deselect all
@@ -1435,15 +1458,37 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            <div className="grid max-h-[26rem] gap-3 overflow-y-auto pr-1">
-              {reviewItems.map((item, i) => (
-                <ReviewCard
-                  index={i}
-                  item={item}
-                  key={i}
-                  onChange={(patch) => updateItem(i, patch)}
-                />
-              ))}
+            <div className="grid max-h-[26rem] gap-4 overflow-y-auto pr-1">
+              {reviewItems.length > 0 && (
+                <div className="grid gap-3">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+                    Activities ({reviewItems.length})
+                  </p>
+                  {reviewItems.map((item, i) => (
+                    <ReviewCard
+                      index={i}
+                      item={item}
+                      key={i}
+                      onChange={(patch) => updateItem(i, patch)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {reviewAwards.length > 0 && (
+                <div className="grid gap-3">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+                    Awards ({reviewAwards.length})
+                  </p>
+                  {reviewAwards.map((item, i) => (
+                    <ReviewAwardCard
+                      award={item}
+                      key={i}
+                      onChange={(patch) => updateAward(i, patch)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             {error && (
@@ -1453,7 +1498,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
             )}
             {success !== null && (
               <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-700">
-                Imported {success} {success === 1 ? "activity" : "activities"}. Closing…
+                {success}
               </div>
             )}
           </div>
@@ -1500,7 +1545,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
               >
                 {isPending
                   ? "Importing…"
-                  : `Import ${includedCount} ${includedCount === 1 ? "activity" : "activities"}`}
+                  : `Import ${includedCount} ${includedCount === 1 ? "item" : "items"}`}
               </button>
             )}
           </div>
@@ -1611,6 +1656,77 @@ function LabeledMini({
         value={value}
       />
     </label>
+  );
+}
+
+function ReviewAwardCard({
+  award,
+  onChange,
+}: {
+  award: ReviewAward;
+  onChange: (patch: Partial<ReviewAward>) => void;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-xl border p-4 transition",
+        award._include
+          ? "border-[color:var(--almanac-rule)] bg-white/60"
+          : "border-dashed border-[color:var(--almanac-rule)] bg-transparent opacity-60",
+      ].join(" ")}
+    >
+      <div className="flex items-start gap-3">
+        <input
+          aria-label={`Include ${award.name || "award"}`}
+          checked={award._include}
+          className="mt-1 size-4 accent-[color:var(--almanac-ink)]"
+          onChange={(e) => onChange({ _include: e.target.checked })}
+          type="checkbox"
+        />
+        <div className="min-w-0 flex-1 grid gap-2">
+          <input
+            className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="Award name"
+            value={award.name ?? ""}
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ organization: e.target.value })}
+              placeholder="Granted by"
+              value={award.organization ?? ""}
+            />
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ year: e.target.value })}
+              placeholder="Year"
+              value={award.year ?? ""}
+            />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ scope: e.target.value })}
+              placeholder="Scope (School, National…)"
+              value={award.scope ?? ""}
+            />
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ level: e.target.value })}
+              placeholder="Level (1st Place, Finalist…)"
+              value={award.level ?? ""}
+            />
+          </div>
+          <textarea
+            className="min-h-[3rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+            onChange={(e) => onChange({ description: e.target.value })}
+            placeholder="Description (optional)"
+            value={award.description ?? ""}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

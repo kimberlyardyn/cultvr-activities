@@ -654,6 +654,16 @@ export type ExtractedActivity = {
   tags?: string[];
 };
 
+export type ExtractedAward = {
+  name?: string;
+  organization?: string;
+  scope?: string;
+  level?: string;
+  year?: string;
+  description?: string;
+  tags?: string[];
+};
+
 async function extractFileText(file: File): Promise<{ text?: string; error?: string }> {
   const buf = Buffer.from(await file.arrayBuffer());
   const name = file.name.toLowerCase();
@@ -711,7 +721,7 @@ async function extractFileText(file: File): Promise<{ text?: string; error?: str
 export async function parseActivitiesFromText(
   formData: FormData,
 ): Promise<
-  | { ok: true; activities: ExtractedActivity[] }
+  | { ok: true; activities: ExtractedActivity[]; awards: ExtractedAward[] }
   | { ok: false; error: string }
 > {
   await requireUser();
@@ -733,23 +743,35 @@ export async function parseActivitiesFromText(
   }
 
   const systemPrompt = `You parse high school resumes / activity lists into structured JSON for a college application workspace.
+Separate genuine ACTIVITIES (clubs, sports, jobs, volunteering, research, ongoing involvements) from AWARDS (honors, prizes, recognitions, distinctions, scholarships, named selections like "National Merit", "1st Place", "Dean's List", "AP Scholar").
 Return ONLY valid JSON matching this shape (no prose, no markdown fence):
-{ "activities": [ {
-  "name": string,
-  "category": one of ["Academic","Art","Athletic - Club","Athletic - JV/Varsity","Career-Oriented","Community Service (Volunteer)","Computer/Technology","Cultural","Dance","Debate/Speech","Environmental","Family Responsibilities","Foreign Exchange","Internship","Journalism/Publication","LGBT","Music: Instrumental","Music: Vocal","Religious","Research","Robotics","School Spirit","Science/Math","Social Justice","Speech & Debate","Student Govt./Politics","Theater/Drama","Work (Paid)","Other Club/Activity"],
-  "position": string,
-  "description": string (rich, multiple sentences if possible),
-  "grades": array of strings from ["9","10","11","12","Post-Graduate","N/A"],
-  "start_date": "YYYY-MM" or "",
-  "end_date": "YYYY-MM" or "",
-  "in_progress": boolean,
-  "hours_per_week": number,
-  "weeks_per_year": number,
-  "tags": array of short strings (e.g. ["Leadership","Service","STEM","Humanities"])
-} ] }
-Use best inference. Leave fields blank/zero/empty array if not specified.`;
+{
+  "activities": [ {
+    "name": string,
+    "category": one of ["Academic","Art","Athletic - Club","Athletic - JV/Varsity","Career-Oriented","Community Service (Volunteer)","Computer/Technology","Cultural","Dance","Debate/Speech","Environmental","Family Responsibilities","Foreign Exchange","Internship","Journalism/Publication","LGBT","Music: Instrumental","Music: Vocal","Religious","Research","Robotics","School Spirit","Science/Math","Social Justice","Speech & Debate","Student Govt./Politics","Theater/Drama","Work (Paid)","Other Club/Activity"],
+    "position": string,
+    "description": string (rich, multiple sentences if possible),
+    "grades": array of strings from ["9","10","11","12","Post-Graduate","N/A"],
+    "start_date": "YYYY-MM" or "",
+    "end_date": "YYYY-MM" or "",
+    "in_progress": boolean,
+    "hours_per_week": number,
+    "weeks_per_year": number,
+    "tags": array of short strings (e.g. ["Leadership","Service","STEM","Humanities"])
+  } ],
+  "awards": [ {
+    "name": string,
+    "organization": string (who granted it, if known) or "",
+    "scope": one of ["School","Regional","State/Provincial","National","International"] or "",
+    "level": string (e.g. "Gold Medal", "1st Place", "Finalist") or "",
+    "year": "YYYY" or "",
+    "description": string (1-2 sentences of context) or "",
+    "tags": array of short strings
+  } ]
+}
+Use best inference. Leave fields blank/zero/empty array if not specified. If there are no awards, return "awards": [].`;
 
-  let parsed: { activities?: ExtractedActivity[] };
+  let parsed: { activities?: ExtractedActivity[]; awards?: ExtractedAward[] };
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -782,8 +804,12 @@ Use best inference. Leave fields blank/zero/empty array if not specified.`;
   }
 
   const activities = (parsed.activities ?? []).filter((a) => a.name?.trim());
-  if (!activities.length) {
-    return { ok: false as const, error: "No activities detected. Try pasting more detail." };
+  const awards = (parsed.awards ?? []).filter((a) => a.name?.trim());
+  if (!activities.length && !awards.length) {
+    return {
+      ok: false as const,
+      error: "No activities or awards detected. Try pasting more detail.",
+    };
   }
 
   // Normalize numeric fields up front so the review UI shows clean values.
@@ -793,67 +819,106 @@ Use best inference. Leave fields blank/zero/empty array if not specified.`;
     weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
   }));
 
-  return { ok: true as const, activities: normalized };
+  return { ok: true as const, activities: normalized, awards };
 }
 
 /**
  * Step 2 of resume import: insert the user-approved (and possibly edited)
- * activities. Accepts a JSON array of ExtractedActivity under "activities".
+ * activities and/or awards. Accepts JSON arrays under "activities" and
+ * "awards".
  */
 export async function commitImportedActivities(
   formData: FormData,
-): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; activityCount: number; awardCount: number }
+  | { ok: false; error: string }
+> {
   const { supabase, user } = await requireUser();
 
-  let incoming: ExtractedActivity[];
+  let incomingActivities: ExtractedActivity[];
+  let incomingAwards: ExtractedAward[];
   try {
-    incoming = JSON.parse(value(formData, "activities") || "[]");
+    incomingActivities = JSON.parse(value(formData, "activities") || "[]");
+    incomingAwards = JSON.parse(value(formData, "awards") || "[]");
   } catch {
-    return { ok: false as const, error: "Could not read the activities to import." };
+    return { ok: false as const, error: "Could not read the items to import." };
   }
 
-  const activities = (incoming ?? []).filter((a) => a?.name?.trim());
-  if (!activities.length) {
-    return { ok: false as const, error: "No activities selected to import." };
+  const activities = (incomingActivities ?? []).filter((a) => a?.name?.trim());
+  const awards = (incomingAwards ?? []).filter((a) => a?.name?.trim());
+  if (!activities.length && !awards.length) {
+    return { ok: false as const, error: "No items selected to import." };
   }
 
-  // Find the current max sort_order so the imports stack at the end.
-  const { data: existing } = await supabase
-    .from("activities")
-    .select("sort_order")
-    .eq("user_id", user.id)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  let nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+  let activityCount = 0;
+  let awardCount = 0;
 
-  const rows = activities.map((a) => ({
-    user_id: user.id,
-    name: a.name?.trim() ?? "Untitled",
-    category: a.category ?? null,
-    position: a.position ?? null,
-    description: a.description ?? null,
-    role: a.position ?? null,
-    impact: a.description ?? null,
-    years:
-      a.start_date && a.end_date
-        ? `${a.start_date} – ${a.end_date}`
-        : a.start_date || null,
-    grades: a.grades ?? [],
-    start_date: a.start_date || null,
-    end_date: a.end_date || null,
-    in_progress: a.in_progress ?? false,
-    // The model (or an edit) may yield fractional hours; columns are integers.
-    hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
-    weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
-    tags: a.tags ?? [],
-    sort_order: nextOrder++,
-  }));
+  // --- Activities ---
+  if (activities.length) {
+    const { data: existing } = await supabase
+      .from("activities")
+      .select("sort_order")
+      .eq("user_id", user.id)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    let nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
 
-  const { error } = await supabase.from("activities").insert(rows);
-  if (error) return { ok: false as const, error: error.message };
+    const rows = activities.map((a) => ({
+      user_id: user.id,
+      name: a.name?.trim() ?? "Untitled",
+      category: a.category ?? null,
+      position: a.position ?? null,
+      description: a.description ?? null,
+      role: a.position ?? null,
+      impact: a.description ?? null,
+      years:
+        a.start_date && a.end_date
+          ? `${a.start_date} – ${a.end_date}`
+          : a.start_date || null,
+      grades: a.grades ?? [],
+      start_date: a.start_date || null,
+      end_date: a.end_date || null,
+      in_progress: a.in_progress ?? false,
+      hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
+      weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
+      tags: a.tags ?? [],
+      sort_order: nextOrder++,
+    }));
+
+    const { error } = await supabase.from("activities").insert(rows);
+    if (error) return { ok: false as const, error: error.message };
+    activityCount = rows.length;
+  }
+
+  // --- Awards ---
+  if (awards.length) {
+    const { data: existing } = await supabase
+      .from("awards")
+      .select("sort_order")
+      .eq("user_id", user.id)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    let nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+
+    const rows = awards.map((a) => ({
+      user_id: user.id,
+      name: a.name?.trim() ?? "Untitled",
+      organization: a.organization || null,
+      scope: a.scope || null,
+      level: a.level || null,
+      year: a.year || null,
+      description: a.description || null,
+      tags: a.tags ?? [],
+      sort_order: nextOrder++,
+    }));
+
+    const { error } = await supabase.from("awards").insert(rows);
+    if (error) return { ok: false as const, error: error.message };
+    awardCount = rows.length;
+  }
 
   revalidatePath("/dashboard");
-  return { ok: true as const, count: rows.length };
+  return { ok: true as const, activityCount, awardCount };
 }
 
 const linkedGoalSchema = z.object({
