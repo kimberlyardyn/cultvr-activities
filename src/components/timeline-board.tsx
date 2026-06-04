@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";
 
+import { PdfDoc } from "@/lib/pdf-doc";
 import {
   deleteActivity,
   deleteAward,
@@ -230,11 +231,32 @@ export function TimelineBoard({
   }, []);
 
   const handlePrint = useCallback(() => {
-    // Browser-native print-to-PDF. Reliable across themes (html2canvas can't
-    // parse Tailwind v4's oklch() colors); the `@media print` rules below give
-    // a clean, paper-friendly layout.
-    window.print();
-  }, []);
+    // Render a real downloadable PDF from the data (no print dialog, no
+    // html2canvas — which can't parse Tailwind v4's oklch() colors).
+    const pdf = new PdfDoc();
+    pdf.add({ type: "title", text: "Timeline" });
+    pdf.add({
+      type: "subtitle",
+      text:
+        fromDate || toDate
+          ? `Range: ${fromDate || "earliest"} → ${toDate || "latest"}`
+          : "All entries",
+    });
+    pdf.add({ type: "rule" });
+
+    if (dateBuckets.length === 0) {
+      pdf.add({ type: "muted", text: "Nothing here yet." });
+    } else {
+      for (const [day, items] of dateBuckets) {
+        pdf.add({ type: "heading", text: formatDay(day) });
+        for (const item of items) {
+          pdf.add({ type: "subheading", text: `${item.label}: ${item.title}` });
+          if (item.summary) pdf.add({ type: "body", text: item.summary });
+        }
+      }
+    }
+    pdf.save("cultvr-timeline");
+  }, [dateBuckets, fromDate, toDate]);
 
   const totalCount = useMemo(
     () => dateBuckets.reduce((n, [, items]) => n + items.length, 0),

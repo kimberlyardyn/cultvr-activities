@@ -28,6 +28,7 @@ import {
   updateStudentAdmissionsProfile,
 } from "@/app/dashboard/actions";
 import { AdminInstructionsSection } from "@/components/admin-instructions-section";
+import { PdfDoc } from "@/lib/pdf-doc";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -1331,9 +1332,60 @@ function ActionPlanView({
 
   function handleExport() {
     setExportOpen(false);
-    // Browser-native print-to-PDF; the `@media print` rules reveal only the
-    // print-only block. Let the popover close first so it isn't captured.
-    setTimeout(() => window.print(), 60);
+
+    const windows = PLAN_WINDOWS.filter((w) => exportSelection.has(w.id));
+    const pdf = new PdfDoc();
+    pdf.add({ type: "title", text: "Action Plan" });
+    pdf.add({
+      type: "subtitle",
+      text: windows.map((w) => w.label).join(" · ") || "No windows selected",
+    });
+    pdf.add({ type: "rule" });
+
+    for (const w of windows) {
+      pdf.add({ type: "heading", text: w.label });
+      pdf.add({ type: "muted", text: w.description });
+
+      const windowGoals = goals.filter((g) => goalToWindow(g) === w.id);
+      const windowChallenges =
+        w.id === "weekly"
+          ? weeklyChallenges.filter((c) => c.status === "active")
+          : [];
+      const autoSec = autoPopSection(w.id);
+
+      for (const sectionId of SECTIONS_BY_WINDOW[w.id]) {
+        const sec = SECTION_DEFS[sectionId];
+        const items = store[w.id][sectionId];
+        const showAuto = sectionId === autoSec;
+        const autoGoals = showAuto ? windowGoals : [];
+        const autoChallenges = showAuto ? windowChallenges : [];
+
+        if (!items.length && !autoGoals.length && !autoChallenges.length) continue;
+
+        pdf.add({ type: "subheading", text: sec.label });
+        for (const g of autoGoals) {
+          const due = g.target_date
+            ? ` (due ${new Date(g.target_date).toLocaleDateString("en", {
+                month: "short",
+                day: "numeric",
+              })})`
+            : "";
+          pdf.add({ type: "bullet", text: `${g.title}${due}  [Goal]` });
+        }
+        for (const c of autoChallenges) {
+          pdf.add({ type: "bullet", text: `${c.title}  [Challenge]` });
+        }
+        for (const item of items) {
+          pdf.add({ type: "bullet", text: `${item.done ? "[x] " : "[ ] "}${item.text}` });
+          for (const note of item.notes ?? []) {
+            pdf.add({ type: "muted", text: `      - ${note}` });
+          }
+        }
+      }
+      pdf.add({ type: "space" });
+    }
+
+    pdf.save("cultvr-action-plan");
   }
 
   function updateStore(updater: (prev: PlanStore) => PlanStore) {
