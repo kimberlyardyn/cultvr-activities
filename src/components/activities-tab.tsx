@@ -1630,10 +1630,42 @@ function ReviewCard({
               value={item.end_date ?? ""}
             />
           </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <LabeledMini
+              label="Grades (comma-separated)"
+              onChange={(v) => onChange({ grades: splitCsv(v) })}
+              value={(item.grades ?? []).join(", ")}
+            />
+            <LabeledMini
+              label="Tags (comma-separated)"
+              onChange={(v) => onChange({ tags: splitCsv(v) })}
+              value={(item.tags ?? []).join(", ")}
+            />
+          </div>
+          {(item.tags ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(item.tags ?? []).map((tag, ti) => (
+                <span
+                  className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-[0.65rem] font-medium text-[color:var(--almanac-ink)]"
+                  key={ti}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+/** Split a comma-separated string into trimmed, non-empty values. */
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function LabeledMini({
@@ -1724,6 +1756,23 @@ function ReviewAwardCard({
             placeholder="Description (optional)"
             value={award.description ?? ""}
           />
+          <LabeledMini
+            label="Tags (comma-separated)"
+            onChange={(v) => onChange({ tags: splitCsv(v) })}
+            value={(award.tags ?? []).join(", ")}
+          />
+          {(award.tags ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(award.tags ?? []).map((tag, ti) => (
+                <span
+                  className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-[0.65rem] font-medium text-[color:var(--almanac-ink)]"
+                  key={ti}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
