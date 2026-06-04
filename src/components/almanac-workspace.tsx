@@ -28,7 +28,7 @@ import {
   updateStudentAdmissionsProfile,
 } from "@/app/dashboard/actions";
 import { AdminInstructionsSection } from "@/components/admin-instructions-section";
-import { PdfDoc } from "@/lib/pdf-doc";
+import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -477,13 +477,20 @@ export function AlmanacWorkspace({
           {tab === "sessions" ? (
             <GuidedSessionsView activities={activities} awards={awards} notes={notes} />
           ) : null}
-          {tab === "action-plan" ? <ActionPlanView goals={goals} weeklyChallenges={weeklyChallenges} /> : null}
+          {tab === "action-plan" ? (
+            <ActionPlanView
+              goals={goals}
+              ownerName={firstName}
+              weeklyChallenges={weeklyChallenges}
+            />
+          ) : null}
           {tab === "timeline" ? (
             <TimelineView
               activities={activities}
               awards={awards}
               notes={notes}
               goals={goals}
+              ownerName={firstName}
               weeklyChallenges={weeklyChallenges}
             />
           ) : null}
@@ -1312,9 +1319,11 @@ function parsePlanStore(raw: string | null): PlanStore {
 
 function ActionPlanView({
   goals,
+  ownerName,
   weeklyChallenges,
 }: {
   goals: Goal[];
+  ownerName: string;
   weeklyChallenges: WeeklyChallenge[];
 }) {
   const [activeWindow, setActiveWindow] = useState<PlanWindowId>("weekly");
@@ -1335,7 +1344,7 @@ function ActionPlanView({
 
     const windows = PLAN_WINDOWS.filter((w) => exportSelection.has(w.id));
     const pdf = new PdfDoc();
-    pdf.add({ type: "title", text: "Action Plan" });
+    pdf.add({ type: "title", text: docTitle(ownerName, "Action Plan") });
     pdf.add({
       type: "subtitle",
       text: windows.map((w) => w.label).join(" · ") || "No windows selected",
@@ -1385,7 +1394,7 @@ function ActionPlanView({
       pdf.add({ type: "space" });
     }
 
-    pdf.save("cultvr-action-plan");
+    pdf.save(docTitle(ownerName, "Action Plan").replace(/[^a-z0-9]+/gi, "-").toLowerCase());
   }
 
   function updateStore(updater: (prev: PlanStore) => PlanStore) {
@@ -2150,12 +2159,14 @@ function TimelineView({
   awards,
   notes,
   goals,
+  ownerName,
   weeklyChallenges,
 }: {
   activities: Activity[];
   awards: Award[];
   notes: Note[];
   goals: Goal[];
+  ownerName: string;
   weeklyChallenges: WeeklyChallenge[];
 }) {
   return (
@@ -2177,6 +2188,7 @@ function TimelineView({
         awards={awards}
         notes={notes}
         goals={goals}
+        ownerName={ownerName}
         weeklyChallenges={weeklyChallenges}
       />
     </Scrollable>

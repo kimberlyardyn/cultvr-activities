@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";
 
-import { PdfDoc } from "@/lib/pdf-doc";
+import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import {
   deleteActivity,
   deleteAward,
@@ -37,6 +37,7 @@ type Props = {
   awards: Award[];
   notes: Note[];
   goals: Goal[];
+  ownerName: string;
   weeklyChallenges: WeeklyChallenge[];
 };
 
@@ -76,6 +77,7 @@ export function TimelineBoard({
   awards,
   notes,
   goals,
+  ownerName,
   weeklyChallenges,
 }: Props) {
   const [fromDate, setFromDate] = useState(""); // YYYY-MM-DD
@@ -234,7 +236,7 @@ export function TimelineBoard({
     // Render a real downloadable PDF from the data (no print dialog, no
     // html2canvas — which can't parse Tailwind v4's oklch() colors).
     const pdf = new PdfDoc();
-    pdf.add({ type: "title", text: "Timeline" });
+    pdf.add({ type: "title", text: docTitle(ownerName, "Timeline") });
     pdf.add({
       type: "subtitle",
       text:
@@ -255,8 +257,8 @@ export function TimelineBoard({
         }
       }
     }
-    pdf.save("cultvr-timeline");
-  }, [dateBuckets, fromDate, toDate]);
+    pdf.save(docTitle(ownerName, "Timeline").replace(/[^a-z0-9]+/gi, "-").toLowerCase());
+  }, [dateBuckets, fromDate, toDate, ownerName]);
 
   const totalCount = useMemo(
     () => dateBuckets.reduce((n, [, items]) => n + items.length, 0),

@@ -8,6 +8,19 @@
  */
 import { jsPDF } from "jspdf";
 
+/** "Kimberly" → "Kimberly's", "Chris" → "Chris'". Falls back gracefully. */
+export function possessive(name: string | null | undefined): string {
+  const n = (name ?? "").trim();
+  if (!n) return "";
+  return /s$/i.test(n) ? `${n}'` : `${n}'s`;
+}
+
+/** Builds a document title like "Kimberly's Timeline" (or just "Timeline"). */
+export function docTitle(name: string | null | undefined, docType: string): string {
+  const owner = possessive(name);
+  return owner ? `${owner} ${docType}` : docType;
+}
+
 const MARGIN = 48; // pt
 const PAGE_W = 595; // A4 width in pt
 const PAGE_H = 842; // A4 height in pt
