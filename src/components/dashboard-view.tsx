@@ -168,7 +168,7 @@ export function DashboardView({
             awards={awards}
           />
         ) : null}
-        {activeTab === "story-activities" ? <ActivitiesTab activities={activities} notes={notes} goals={goals} /> : null}
+        {activeTab === "story-activities" ? <ActivitiesTab activities={activities} awards={awards} notes={notes} goals={goals} /> : null}
         {activeTab === "awards" ? <AwardsTab awards={awards} activities={activities} goals={goals} /> : null}
         {activeTab === "weekly-challenge" ? (
           <WeeklyChallengeTab challenges={weeklyChallenges} />

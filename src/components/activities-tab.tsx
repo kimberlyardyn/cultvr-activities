@@ -37,7 +37,7 @@ import {
   PendingGoalsEditor,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
-import type { Activity, Goal, Note } from "@/lib/types";
+import type { Activity, Award, Goal, Note } from "@/lib/types";
 
 const CATEGORIES = [
   "Academic",
@@ -208,10 +208,12 @@ function emptyDraft(): ActivityDraft {
 
 export function ActivitiesTab({
   activities,
+  awards,
   notes,
   goals,
 }: {
   activities: Activity[];
+  awards?: Award[];
   notes: Note[];
   goals: Goal[];
 }) {
@@ -379,7 +381,11 @@ export function ActivitiesTab({
       )}
 
       {importing && (
-        <ResumeImportModal onClose={() => setImporting(false)} />
+        <ResumeImportModal
+          existingActivityNames={activities.map((a) => a.name)}
+          existingAwardNames={(awards ?? []).map((a) => a.name)}
+          onClose={() => setImporting(false)}
+        />
       )}
     </div>
   );
@@ -1252,7 +1258,28 @@ function SelectInput({
 type ReviewActivity = ExtractedActivity & { _include: boolean };
 type ReviewAward = ExtractedAward & { _include: boolean };
 
-function ResumeImportModal({ onClose }: { onClose: () => void }) {
+/** Loose name match for duplicate detection — case/space/punctuation-insensitive. */
+function normalizeName(name: string | undefined): string {
+  return (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function ResumeImportModal({
+  existingActivityNames,
+  existingAwardNames,
+  onClose,
+}: {
+  existingActivityNames: string[];
+  existingAwardNames: string[];
+  onClose: () => void;
+}) {
+  const existingActivitySet = useMemo(
+    () => new Set(existingActivityNames.map(normalizeName)),
+    [existingActivityNames],
+  );
+  const existingAwardSet = useMemo(
+    () => new Set(existingAwardNames.map(normalizeName)),
+    [existingAwardNames],
+  );
   const [step, setStep] = useState<"input" | "review">("input");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -1467,6 +1494,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
                   {reviewItems.map((item, i) => (
                     <ReviewCard
                       index={i}
+                      isDuplicate={existingActivitySet.has(normalizeName(item.name))}
                       item={item}
                       key={i}
                       onChange={(patch) => updateItem(i, patch)}
@@ -1483,6 +1511,7 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
                   {reviewAwards.map((item, i) => (
                     <ReviewAwardCard
                       award={item}
+                      isDuplicate={existingAwardSet.has(normalizeName(item.name))}
                       key={i}
                       onChange={(patch) => updateAward(i, patch)}
                     />
@@ -1557,10 +1586,12 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
 
 function ReviewCard({
   index,
+  isDuplicate = false,
   item,
   onChange,
 }: {
   index: number;
+  isDuplicate?: boolean;
   item: ReviewActivity;
   onChange: (patch: Partial<ReviewActivity>) => void;
 }) {
@@ -1582,32 +1613,47 @@ function ReviewCard({
           type="checkbox"
         />
         <div className="min-w-0 flex-1 grid gap-2">
-          <input
-            className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-            onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="Activity name"
-            value={item.name ?? ""}
-          />
+          {isDuplicate && (
+            <p className="rounded-md bg-red-500/10 px-2.5 py-1.5 text-[0.7rem] leading-4 text-red-700">
+              An activity with this name already exists. Importing will add a{" "}
+              <strong>separate new entry</strong> — it won&apos;t replace the existing
+              one. Uncheck it, or edit your current activity instead, to avoid a duplicate.
+            </p>
+          )}
+          <LabeledField label="Activity name">
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ name: e.target.value })}
+              placeholder="e.g. Robotics Club"
+              value={item.name ?? ""}
+            />
+          </LabeledField>
           <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ position: e.target.value })}
-              placeholder="Role / position"
-              value={item.position ?? ""}
-            />
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ category: e.target.value })}
-              placeholder="Category"
-              value={item.category ?? ""}
-            />
+            <LabeledField label="Role / position">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ position: e.target.value })}
+                placeholder="e.g. Founder, President"
+                value={item.position ?? ""}
+              />
+            </LabeledField>
+            <LabeledField label="Category">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ category: e.target.value })}
+                placeholder="e.g. Science/Math"
+                value={item.category ?? ""}
+              />
+            </LabeledField>
           </div>
-          <textarea
-            className="min-h-[3.5rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Description"
-            value={item.description ?? ""}
-          />
+          <LabeledField label="Description">
+            <textarea
+              className="min-h-[3.5rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ description: e.target.value })}
+              placeholder="What you did, your impact, key accomplishments…"
+              value={item.description ?? ""}
+            />
+          </LabeledField>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <LabeledMini
               label="Hrs/wk"
@@ -1668,6 +1714,24 @@ function splitCsv(value: string): string[] {
     .filter(Boolean);
 }
 
+/** Wraps a field with a small uppercase caption above it. */
+function LabeledField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[0.6rem] uppercase tracking-[0.1em] text-[color:var(--almanac-ink-soft)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 function LabeledMini({
   label,
   onChange,
@@ -1693,9 +1757,11 @@ function LabeledMini({
 
 function ReviewAwardCard({
   award,
+  isDuplicate = false,
   onChange,
 }: {
   award: ReviewAward;
+  isDuplicate?: boolean;
   onChange: (patch: Partial<ReviewAward>) => void;
 }) {
   return (
@@ -1716,46 +1782,65 @@ function ReviewAwardCard({
           type="checkbox"
         />
         <div className="min-w-0 flex-1 grid gap-2">
-          <input
-            className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-            onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="Award name"
-            value={award.name ?? ""}
-          />
+          {isDuplicate && (
+            <p className="rounded-md bg-red-500/10 px-2.5 py-1.5 text-[0.7rem] leading-4 text-red-700">
+              An award with this name already exists. Importing will add a{" "}
+              <strong>separate new entry</strong> — it won&apos;t replace the existing
+              one. Uncheck it to avoid a duplicate.
+            </p>
+          )}
+          <LabeledField label="Award name">
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ name: e.target.value })}
+              placeholder="e.g. National Merit Finalist"
+              value={award.name ?? ""}
+            />
+          </LabeledField>
           <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ organization: e.target.value })}
-              placeholder="Granted by"
-              value={award.organization ?? ""}
-            />
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ year: e.target.value })}
-              placeholder="Year"
-              value={award.year ?? ""}
-            />
+            <LabeledField label="Granted by">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ organization: e.target.value })}
+                placeholder="e.g. College Board"
+                value={award.organization ?? ""}
+              />
+            </LabeledField>
+            <LabeledField label="Year">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ year: e.target.value })}
+                placeholder="e.g. 2024"
+                value={award.year ?? ""}
+              />
+            </LabeledField>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ scope: e.target.value })}
-              placeholder="Scope (School, National…)"
-              value={award.scope ?? ""}
-            />
-            <input
-              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => onChange({ level: e.target.value })}
-              placeholder="Level (1st Place, Finalist…)"
-              value={award.level ?? ""}
-            />
+            <LabeledField label="Scope">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ scope: e.target.value })}
+                placeholder="School, Regional, National…"
+                value={award.scope ?? ""}
+              />
+            </LabeledField>
+            <LabeledField label="Level">
+              <input
+                className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => onChange({ level: e.target.value })}
+                placeholder="1st Place, Finalist…"
+                value={award.level ?? ""}
+              />
+            </LabeledField>
           </div>
-          <textarea
-            className="min-h-[3rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Description (optional)"
-            value={award.description ?? ""}
-          />
+          <LabeledField label="Description">
+            <textarea
+              className="min-h-[3rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ description: e.target.value })}
+              placeholder="Context about the award (optional)"
+              value={award.description ?? ""}
+            />
+          </LabeledField>
           <LabeledMini
             label="Tags (comma-separated)"
             onChange={(v) => onChange({ tags: splitCsv(v) })}
