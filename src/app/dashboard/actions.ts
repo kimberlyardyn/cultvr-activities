@@ -640,7 +640,7 @@ export async function deleteAward(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-type ExtractedActivity = {
+export type ExtractedActivity = {
   name?: string;
   category?: string;
   position?: string;
@@ -703,8 +703,18 @@ async function extractFileText(file: File): Promise<{ text?: string; error?: str
   };
 }
 
-export async function importActivitiesFromText(formData: FormData) {
-  const { supabase, user } = await requireUser();
+/**
+ * Step 1 of resume import: extract structured activities from pasted text or an
+ * uploaded file WITHOUT writing to the DB. The client shows these for review /
+ * editing, then calls commitImportedActivities() with the approved subset.
+ */
+export async function parseActivitiesFromText(
+  formData: FormData,
+): Promise<
+  | { ok: true; activities: ExtractedActivity[] }
+  | { ok: false; error: string }
+> {
+  await requireUser();
 
   // Accept either pasted text or an uploaded file (PDF / DOCX / TXT).
   let text = value(formData, "text");
@@ -776,6 +786,37 @@ Use best inference. Leave fields blank/zero/empty array if not specified.`;
     return { ok: false as const, error: "No activities detected. Try pasting more detail." };
   }
 
+  // Normalize numeric fields up front so the review UI shows clean values.
+  const normalized = activities.map((a) => ({
+    ...a,
+    hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
+    weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
+  }));
+
+  return { ok: true as const, activities: normalized };
+}
+
+/**
+ * Step 2 of resume import: insert the user-approved (and possibly edited)
+ * activities. Accepts a JSON array of ExtractedActivity under "activities".
+ */
+export async function commitImportedActivities(
+  formData: FormData,
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const { supabase, user } = await requireUser();
+
+  let incoming: ExtractedActivity[];
+  try {
+    incoming = JSON.parse(value(formData, "activities") || "[]");
+  } catch {
+    return { ok: false as const, error: "Could not read the activities to import." };
+  }
+
+  const activities = (incoming ?? []).filter((a) => a?.name?.trim());
+  if (!activities.length) {
+    return { ok: false as const, error: "No activities selected to import." };
+  }
+
   // Find the current max sort_order so the imports stack at the end.
   const { data: existing } = await supabase
     .from("activities")
@@ -801,8 +842,7 @@ Use best inference. Leave fields blank/zero/empty array if not specified.`;
     start_date: a.start_date || null,
     end_date: a.end_date || null,
     in_progress: a.in_progress ?? false,
-    // The model may return fractional hours (e.g. 0.5). These columns are
-    // integers, so round and clamp to valid ranges.
+    // The model (or an edit) may yield fractional hours; columns are integers.
     hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
     weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
     tags: a.tags ?? [],

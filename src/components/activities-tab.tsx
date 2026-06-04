@@ -17,13 +17,15 @@ import {
 import { useCallback, useMemo, useState, useTransition } from "react";
 
 import {
+  commitImportedActivities,
   createActivity,
   createNoteForActivity,
   deleteActivity,
-  importActivitiesFromText,
+  parseActivitiesFromText,
   reorderActivities,
   tagNoteToActivity,
   updateActivity,
+  type ExtractedActivity,
 } from "@/app/dashboard/actions";
 import {
   ActivityVoiceCoach,
@@ -1246,20 +1248,21 @@ function SelectInput({
 // RESUME IMPORT MODAL
 // ============================================================================
 
+type ReviewActivity = ExtractedActivity & { _include: boolean };
+
 function ResumeImportModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<"input" | "review">("input");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<number | null>(null);
+  const [reviewItems, setReviewItems] = useState<ReviewActivity[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const handleFile = useCallback(async (picked: File) => {
     if (!picked) return;
     setError(null);
     setFile(picked);
-
-    // For .txt files, also preview inline so the student can review/edit
-    // before parsing. For PDF/DOCX, we'll parse server-side at import time.
     if (
       picked.type === "text/plain" ||
       picked.name.endsWith(".txt") ||
@@ -1268,43 +1271,75 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
       const content = await picked.text();
       setText(content);
     } else {
-      // Clear text preview — server will extract from the file.
       setText("");
     }
   }, []);
 
-  const handleImport = useCallback(() => {
+  // Step 1: parse → move to review (no DB write yet).
+  const handleParse = useCallback(() => {
     if (!text.trim() && !file) {
       setError("Paste resume text or upload a file first.");
       return;
     }
     setError(null);
-    setSuccess(null);
     const fd = new FormData();
-    if (text.trim()) {
-      fd.set("text", text);
-    } else if (file) {
-      fd.set("file", file);
-    }
+    if (text.trim()) fd.set("text", text);
+    else if (file) fd.set("file", file);
+
     startTransition(async () => {
-      const res = await importActivitiesFromText(fd);
+      const res = await parseActivitiesFromText(fd);
       if (res.ok) {
-        setSuccess(res.count);
-        setTimeout(() => onClose(), 1500);
+        setReviewItems(res.activities.map((a) => ({ ...a, _include: true })));
+        setStep("review");
       } else {
         setError(res.error);
       }
     });
-  }, [text, file, onClose]);
+  }, [text, file]);
+
+  // Step 2: commit the included (and possibly edited) items.
+  const handleCommit = useCallback(() => {
+    const chosen = reviewItems
+      .filter((a) => a._include && a.name?.trim())
+      .map(({ _include, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
+    if (!chosen.length) {
+      setError("Select at least one activity to import.");
+      return;
+    }
+    setError(null);
+    const fd = new FormData();
+    fd.set("activities", JSON.stringify(chosen));
+    startTransition(async () => {
+      const res = await commitImportedActivities(fd);
+      if (res.ok) {
+        setSuccess(res.count);
+        setTimeout(() => onClose(), 1400);
+      } else {
+        setError(res.error);
+      }
+    });
+  }, [reviewItems, onClose]);
+
+  function updateItem(index: number, patch: Partial<ReviewActivity>) {
+    setReviewItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  }
+
+  const includedCount = reviewItems.filter((a) => a._include).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
-      <div className="my-8 w-full max-w-xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
+      <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
         <header className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-6 py-4">
           <div>
-            <h3 className="font-serif text-2xl text-[color:var(--almanac-ink)]">Import from resume</h3>
+            <h3 className="font-serif text-2xl text-[color:var(--almanac-ink)]">
+              {step === "input" ? "Import from resume" : "Review activities"}
+            </h3>
             <p className="text-xs text-[color:var(--almanac-ink-soft)]">
-              Paste your resume or activities list. We&apos;ll parse it into structured entries you can edit.
+              {step === "input"
+                ? "Paste your resume or activities list. We'll parse it into structured entries you can review."
+                : "Edit anything, then choose which to import. Nothing is saved until you click Import."}
             </p>
           </div>
           <button
@@ -1316,86 +1351,266 @@ function ResumeImportModal({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        <div className="grid gap-4 px-6 py-5">
-          <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-white">
-            <Upload size={12} />
-            Upload PDF, Word doc, or text file
-            <input
-              accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-              className="sr-only"
-              onChange={(e) => {
-                const picked = e.target.files?.[0];
-                if (picked) void handleFile(picked);
-                e.target.value = "";
-              }}
-              type="file"
-            />
-          </label>
+        {step === "input" ? (
+          <div className="grid gap-4 px-6 py-5">
+            <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-white">
+              <Upload size={12} />
+              Upload PDF, Word doc, or text file
+              <input
+                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                className="sr-only"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) void handleFile(picked);
+                  e.target.value = "";
+                }}
+                type="file"
+              />
+            </label>
 
-          {file && !text && (
-            <div className="rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2 text-xs text-[color:var(--almanac-ink)]">
-              Ready to parse: <strong>{file.name}</strong>{" "}
-              <span className="text-[color:var(--almanac-ink-soft)]">
-                ({Math.round(file.size / 1024)} KB) — click <em>Parse &amp; import</em> below.
+            {file && !text && (
+              <div className="rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2 text-xs text-[color:var(--almanac-ink)]">
+                Ready to parse: <strong>{file.name}</strong>{" "}
+                <span className="text-[color:var(--almanac-ink-soft)]">
+                  ({Math.round(file.size / 1024)} KB) — click <em>Parse</em> below.
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <span className="h-px flex-1 bg-[color:var(--almanac-rule)]" />
+              <span className="text-[0.6rem] uppercase tracking-[0.15em] text-[color:var(--almanac-ink-soft)]">
+                or paste text
               </span>
+              <span className="h-px flex-1 bg-[color:var(--almanac-rule)]" />
             </div>
-          )}
 
-          <div className="flex items-center gap-2">
-            <span className="h-px flex-1 bg-[color:var(--almanac-rule)]" />
-            <span className="text-[0.6rem] uppercase tracking-[0.15em] text-[color:var(--almanac-ink-soft)]">
-              or paste text
-            </span>
-            <span className="h-px flex-1 bg-[color:var(--almanac-rule)]" />
+            <label className="grid gap-2">
+              <span className="text-xs font-medium text-[color:var(--almanac-ink)]">
+                Paste your resume text
+              </span>
+              <textarea
+                className="min-h-[12rem] w-full rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2.5 text-sm leading-6 text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[#3F4A66] focus:bg-white"
+                maxLength={12000}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (e.target.value) setFile(null);
+                }}
+                placeholder="Paste your resume, Common App activities list, or any structured activity history here..."
+                value={text}
+              />
+            </label>
+
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
+                {error}
+              </div>
+            )}
           </div>
+        ) : (
+          <div className="grid gap-3 px-6 py-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[color:var(--almanac-ink-soft)]">
+                {includedCount} of {reviewItems.length} selected
+              </p>
+              <div className="flex gap-3 text-[0.7rem]">
+                <button
+                  className="text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)]"
+                  onClick={() =>
+                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: true })))
+                  }
+                  type="button"
+                >
+                  Select all
+                </button>
+                <button
+                  className="text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)]"
+                  onClick={() =>
+                    setReviewItems((prev) => prev.map((a) => ({ ...a, _include: false })))
+                  }
+                  type="button"
+                >
+                  Deselect all
+                </button>
+              </div>
+            </div>
 
-          <label className="grid gap-2">
-            <span className="text-xs font-medium text-[color:var(--almanac-ink)]">
-              Paste your resume text
-            </span>
-            <textarea
-              className="min-h-[12rem] w-full rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2.5 text-sm leading-6 text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[#3F4A66] focus:bg-white"
-              maxLength={12000}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (e.target.value) setFile(null);
+            <div className="grid max-h-[26rem] gap-3 overflow-y-auto pr-1">
+              {reviewItems.map((item, i) => (
+                <ReviewCard
+                  index={i}
+                  item={item}
+                  key={i}
+                  onChange={(patch) => updateItem(i, patch)}
+                />
+              ))}
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+            {success !== null && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-700">
+                Imported {success} {success === 1 ? "activity" : "activities"}. Closing…
+              </div>
+            )}
+          </div>
+        )}
+
+        <footer className="flex items-center justify-between gap-2 border-t border-[color:var(--almanac-rule)] px-6 py-4">
+          {step === "review" ? (
+            <button
+              className="rounded-full border border-[color:var(--almanac-rule)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+              onClick={() => {
+                setStep("input");
+                setError(null);
               }}
-              placeholder="Paste your resume, Common App activities list, or any structured activity history here..."
-              value={text}
-            />
-          </label>
-
-          {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
-              {error}
-            </div>
+              type="button"
+            >
+              ← Back
+            </button>
+          ) : (
+            <span />
           )}
-          {success !== null && (
-            <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-700">
-              Imported {success} {success === 1 ? "activity" : "activities"}. Closing…
-            </div>
-          )}
-        </div>
-
-        <footer className="flex items-center justify-end gap-2 border-t border-[color:var(--almanac-rule)] px-6 py-4">
-          <button
-            className="rounded-full border border-[color:var(--almanac-rule)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className="rounded-full bg-[color:var(--almanac-ink)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
-            disabled={isPending || (!text.trim() && !file)}
-            onClick={handleImport}
-            type="button"
-          >
-            {isPending ? "Parsing…" : "Parse & import"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="rounded-full border border-[color:var(--almanac-rule)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+              onClick={onClose}
+              type="button"
+            >
+              Cancel
+            </button>
+            {step === "input" ? (
+              <button
+                className="rounded-full bg-[color:var(--almanac-ink)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
+                disabled={isPending || (!text.trim() && !file)}
+                onClick={handleParse}
+                type="button"
+              >
+                {isPending ? "Parsing…" : "Parse"}
+              </button>
+            ) : (
+              <button
+                className="rounded-full bg-[color:var(--almanac-ink)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
+                disabled={isPending || includedCount === 0 || success !== null}
+                onClick={handleCommit}
+                type="button"
+              >
+                {isPending
+                  ? "Importing…"
+                  : `Import ${includedCount} ${includedCount === 1 ? "activity" : "activities"}`}
+              </button>
+            )}
+          </div>
         </footer>
       </div>
     </div>
+  );
+}
+
+function ReviewCard({
+  index,
+  item,
+  onChange,
+}: {
+  index: number;
+  item: ReviewActivity;
+  onChange: (patch: Partial<ReviewActivity>) => void;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-xl border p-4 transition",
+        item._include
+          ? "border-[color:var(--almanac-rule)] bg-white/60"
+          : "border-dashed border-[color:var(--almanac-rule)] bg-transparent opacity-60",
+      ].join(" ")}
+    >
+      <div className="flex items-start gap-3">
+        <input
+          aria-label={`Include ${item.name || `activity ${index + 1}`}`}
+          checked={item._include}
+          className="mt-1 size-4 accent-[color:var(--almanac-ink)]"
+          onChange={(e) => onChange({ _include: e.target.checked })}
+          type="checkbox"
+        />
+        <div className="min-w-0 flex-1 grid gap-2">
+          <input
+            className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-sm font-medium text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="Activity name"
+            value={item.name ?? ""}
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ position: e.target.value })}
+              placeholder="Role / position"
+              value={item.position ?? ""}
+            />
+            <input
+              className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => onChange({ category: e.target.value })}
+              placeholder="Category"
+              value={item.category ?? ""}
+            />
+          </div>
+          <textarea
+            className="min-h-[3.5rem] w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-5 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+            onChange={(e) => onChange({ description: e.target.value })}
+            placeholder="Description"
+            value={item.description ?? ""}
+          />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <LabeledMini
+              label="Hrs/wk"
+              onChange={(v) => onChange({ hours_per_week: Number(v) || 0 })}
+              value={String(item.hours_per_week ?? 0)}
+            />
+            <LabeledMini
+              label="Wks/yr"
+              onChange={(v) => onChange({ weeks_per_year: Number(v) || 0 })}
+              value={String(item.weeks_per_year ?? 0)}
+            />
+            <LabeledMini
+              label="Start"
+              onChange={(v) => onChange({ start_date: v })}
+              value={item.start_date ?? ""}
+            />
+            <LabeledMini
+              label="End"
+              onChange={(v) => onChange({ end_date: v })}
+              value={item.end_date ?? ""}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LabeledMini({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[0.6rem] uppercase tracking-[0.1em] text-[color:var(--almanac-ink-soft)]">
+        {label}
+      </span>
+      <input
+        className="w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2 py-1 text-xs text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+        onChange={(e) => onChange(e.target.value)}
+        value={value}
+      />
+    </label>
   );
 }
 
