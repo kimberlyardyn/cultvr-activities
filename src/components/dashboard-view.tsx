@@ -1993,7 +1993,16 @@ function buildKnowledgeGraph({
           kind: "action" as const,
         }]
       : [];
-  const nodes = [...topSignals, ...memoryNodes, ...activityNodes, ...collegeNodes, ...actionNode].slice(0, 8);
+  // Dedupe by id — two memories/signals can slugify to the same id (e.g. two
+  // "leadership" memories → "memory-leadership"), which breaks React keys.
+  const seenNodeIds = new Set<string>();
+  const nodes = [...topSignals, ...memoryNodes, ...activityNodes, ...collegeNodes, ...actionNode]
+    .filter((node) => {
+      if (seenNodeIds.has(node.id)) return false;
+      seenNodeIds.add(node.id);
+      return true;
+    })
+    .slice(0, 8);
 
   if (nodes.length < 4) return dashboardDemo.knowledgeGraph;
 

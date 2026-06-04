@@ -1331,7 +1331,8 @@ function ActionPlanView({
 
   function handleExport() {
     setExportOpen(false);
-    // Let the popover close before triggering print, so it isn't captured.
+    // Browser-native print-to-PDF; the `@media print` rules reveal only the
+    // print-only block. Let the popover close first so it isn't captured.
     setTimeout(() => window.print(), 60);
   }
 

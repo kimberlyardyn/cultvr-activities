@@ -230,7 +230,9 @@ export function TimelineBoard({
   }, []);
 
   const handlePrint = useCallback(() => {
-    // Browser's native print-to-PDF respects the `print:` Tailwind utilities below.
+    // Browser-native print-to-PDF. Reliable across themes (html2canvas can't
+    // parse Tailwind v4's oklch() colors); the `@media print` rules below give
+    // a clean, paper-friendly layout.
     window.print();
   }, []);
 
