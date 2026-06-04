@@ -382,8 +382,8 @@ export function ActivitiesTab({
 
       {importing && (
         <ResumeImportModal
-          existingActivityNames={activities.map((a) => a.name)}
-          existingAwardNames={(awards ?? []).map((a) => a.name)}
+          existingActivities={activities.map((a) => ({ id: a.id, name: a.name }))}
+          existingAwards={(awards ?? []).map((a) => ({ id: a.id, name: a.name }))}
           onClose={() => setImporting(false)}
         />
       )}
@@ -1255,31 +1255,37 @@ function SelectInput({
 // RESUME IMPORT MODAL
 // ============================================================================
 
-type ReviewActivity = ExtractedActivity & { _include: boolean };
-type ReviewAward = ExtractedAward & { _include: boolean };
+type ImportMode = "add" | "replace";
+type ReviewActivity = ExtractedActivity & { _include: boolean; _mode: ImportMode };
+type ReviewAward = ExtractedAward & { _include: boolean; _mode: ImportMode };
 
 /** Loose name match for duplicate detection — case/space/punctuation-insensitive. */
 function normalizeName(name: string | undefined): string {
   return (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+type ExistingRef = { id: string; name: string };
+
 function ResumeImportModal({
-  existingActivityNames,
-  existingAwardNames,
+  existingActivities,
+  existingAwards,
   onClose,
 }: {
-  existingActivityNames: string[];
-  existingAwardNames: string[];
+  existingActivities: ExistingRef[];
+  existingAwards: ExistingRef[];
   onClose: () => void;
 }) {
-  const existingActivitySet = useMemo(
-    () => new Set(existingActivityNames.map(normalizeName)),
-    [existingActivityNames],
-  );
-  const existingAwardSet = useMemo(
-    () => new Set(existingAwardNames.map(normalizeName)),
-    [existingAwardNames],
-  );
+  // Map normalized name → existing row id, for duplicate detection + replace.
+  const existingActivityMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of existingActivities) m.set(normalizeName(a.name), a.id);
+    return m;
+  }, [existingActivities]);
+  const existingAwardMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of existingAwards) m.set(normalizeName(a.name), a.id);
+    return m;
+  }, [existingAwards]);
   const [step, setStep] = useState<"input" | "review">("input");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -1319,8 +1325,12 @@ function ResumeImportModal({
     startTransition(async () => {
       const res = await parseActivitiesFromText(fd);
       if (res.ok) {
-        setReviewItems(res.activities.map((a) => ({ ...a, _include: true })));
-        setReviewAwards(res.awards.map((a) => ({ ...a, _include: true })));
+        setReviewItems(
+          res.activities.map((a) => ({ ...a, _include: true, _mode: "add" as const })),
+        );
+        setReviewAwards(
+          res.awards.map((a) => ({ ...a, _include: true, _mode: "add" as const })),
+        );
         setStep("review");
       } else {
         setError(res.error);
@@ -1328,14 +1338,25 @@ function ResumeImportModal({
     });
   }, [text, file]);
 
-  // Step 2: commit the included (and possibly edited) items.
+  // Step 2: commit the included (and possibly edited) items. Items marked
+  // "replace" carry the matched existing row id so the server overwrites it.
   const handleCommit = useCallback(() => {
     const chosenActivities = reviewItems
       .filter((a) => a._include && a.name?.trim())
-      .map(({ _include, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
+      .map(({ _include, _mode, ...rest }) => ({
+        ...rest,
+        ...(_mode === "replace"
+          ? { _replaceId: existingActivityMap.get(normalizeName(rest.name)) }
+          : {}),
+      }));
     const chosenAwards = reviewAwards
       .filter((a) => a._include && a.name?.trim())
-      .map(({ _include, ...rest }) => rest); // eslint-disable-line @typescript-eslint/no-unused-vars
+      .map(({ _include, _mode, ...rest }) => ({
+        ...rest,
+        ...(_mode === "replace"
+          ? { _replaceId: existingAwardMap.get(normalizeName(rest.name)) }
+          : {}),
+      }));
     if (!chosenActivities.length && !chosenAwards.length) {
       setError("Select at least one item to import.");
       return;
@@ -1347,18 +1368,18 @@ function ResumeImportModal({
     startTransition(async () => {
       const res = await commitImportedActivities(fd);
       if (res.ok) {
+        const added = res.activityCount + res.awardCount;
         const parts: string[] = [];
-        if (res.activityCount)
-          parts.push(`${res.activityCount} ${res.activityCount === 1 ? "activity" : "activities"}`);
-        if (res.awardCount)
-          parts.push(`${res.awardCount} ${res.awardCount === 1 ? "award" : "awards"}`);
-        setSuccess(`Imported ${parts.join(" and ")}. Closing…`);
+        if (added) parts.push(`Added ${added} ${added === 1 ? "item" : "items"}`);
+        if (res.replacedCount)
+          parts.push(`replaced ${res.replacedCount} ${res.replacedCount === 1 ? "item" : "items"}`);
+        setSuccess(`${parts.join(", ") || "Done"}. Closing…`);
         setTimeout(() => onClose(), 1400);
       } else {
         setError(res.error);
       }
     });
-  }, [reviewItems, reviewAwards, onClose]);
+  }, [reviewItems, reviewAwards, existingActivityMap, existingAwardMap, onClose]);
 
   function updateItem(index: number, patch: Partial<ReviewActivity>) {
     setReviewItems((prev) =>
@@ -1494,7 +1515,7 @@ function ResumeImportModal({
                   {reviewItems.map((item, i) => (
                     <ReviewCard
                       index={i}
-                      isDuplicate={existingActivitySet.has(normalizeName(item.name))}
+                      isDuplicate={existingActivityMap.has(normalizeName(item.name))}
                       item={item}
                       key={i}
                       onChange={(patch) => updateItem(i, patch)}
@@ -1511,7 +1532,7 @@ function ResumeImportModal({
                   {reviewAwards.map((item, i) => (
                     <ReviewAwardCard
                       award={item}
-                      isDuplicate={existingAwardSet.has(normalizeName(item.name))}
+                      isDuplicate={existingAwardMap.has(normalizeName(item.name))}
                       key={i}
                       onChange={(patch) => updateAward(i, patch)}
                     />
@@ -1614,11 +1635,11 @@ function ReviewCard({
         />
         <div className="min-w-0 flex-1 grid gap-2">
           {isDuplicate && (
-            <p className="rounded-md bg-red-500/10 px-2.5 py-1.5 text-[0.7rem] leading-4 text-red-700">
-              An activity with this name already exists. Importing will add a{" "}
-              <strong>separate new entry</strong> — it won&apos;t replace the existing
-              one. Uncheck it, or edit your current activity instead, to avoid a duplicate.
-            </p>
+            <DuplicateBanner
+              kind="activity"
+              mode={item._mode}
+              onMode={(m) => onChange({ _mode: m })}
+            />
           )}
           <LabeledField label="Activity name">
             <input
@@ -1732,6 +1753,52 @@ function LabeledField({
   );
 }
 
+/** Warning + Add-new / Replace-existing toggle shown on duplicate import items. */
+function DuplicateBanner({
+  kind,
+  mode,
+  onMode,
+}: {
+  kind: "activity" | "award";
+  mode: ImportMode;
+  onMode: (mode: ImportMode) => void;
+}) {
+  return (
+    <div className="rounded-md bg-red-500/10 px-2.5 py-2 text-[0.7rem] leading-4 text-red-700">
+      <p>
+        An {kind} with this name already exists.{" "}
+        {mode === "add" ? (
+          <>This will be added as a <strong>separate new entry</strong>.</>
+        ) : (
+          <>This will <strong>overwrite</strong> your existing {kind}.</>
+        )}
+      </p>
+      <div className="mt-1.5 inline-flex overflow-hidden rounded-full border border-red-500/40">
+        <button
+          className={[
+            "px-2.5 py-1 text-[0.65rem] font-medium transition",
+            mode === "add" ? "bg-red-600 text-white" : "text-red-700 hover:bg-red-500/10",
+          ].join(" ")}
+          onClick={() => onMode("add")}
+          type="button"
+        >
+          Add as new
+        </button>
+        <button
+          className={[
+            "px-2.5 py-1 text-[0.65rem] font-medium transition",
+            mode === "replace" ? "bg-red-600 text-white" : "text-red-700 hover:bg-red-500/10",
+          ].join(" ")}
+          onClick={() => onMode("replace")}
+          type="button"
+        >
+          Replace existing
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LabeledMini({
   label,
   onChange,
@@ -1783,11 +1850,11 @@ function ReviewAwardCard({
         />
         <div className="min-w-0 flex-1 grid gap-2">
           {isDuplicate && (
-            <p className="rounded-md bg-red-500/10 px-2.5 py-1.5 text-[0.7rem] leading-4 text-red-700">
-              An award with this name already exists. Importing will add a{" "}
-              <strong>separate new entry</strong> — it won&apos;t replace the existing
-              one. Uncheck it to avoid a duplicate.
-            </p>
+            <DuplicateBanner
+              kind="award"
+              mode={award._mode}
+              onMode={(m) => onChange({ _mode: m })}
+            />
           )}
           <LabeledField label="Award name">
             <input

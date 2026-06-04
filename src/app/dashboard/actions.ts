@@ -830,13 +830,18 @@ Use best inference. Leave fields blank/zero/empty array if not specified. If the
 export async function commitImportedActivities(
   formData: FormData,
 ): Promise<
-  | { ok: true; activityCount: number; awardCount: number }
+  | { ok: true; activityCount: number; awardCount: number; replacedCount: number }
   | { ok: false; error: string }
 > {
   const { supabase, user } = await requireUser();
 
-  let incomingActivities: ExtractedActivity[];
-  let incomingAwards: ExtractedAward[];
+  // Items may carry an optional `_replaceId` — when present, the user chose to
+  // overwrite that existing row instead of adding a new entry.
+  type ImportActivity = ExtractedActivity & { _replaceId?: string };
+  type ImportAward = ExtractedAward & { _replaceId?: string };
+
+  let incomingActivities: ImportActivity[];
+  let incomingAwards: ImportAward[];
   try {
     incomingActivities = JSON.parse(value(formData, "activities") || "[]");
     incomingAwards = JSON.parse(value(formData, "awards") || "[]");
@@ -852,9 +857,43 @@ export async function commitImportedActivities(
 
   let activityCount = 0;
   let awardCount = 0;
+  let replacedCount = 0;
+
+  const activityFields = (a: ImportActivity) => ({
+    name: a.name?.trim() ?? "Untitled",
+    category: a.category ?? null,
+    position: a.position ?? null,
+    description: a.description ?? null,
+    role: a.position ?? null,
+    impact: a.description ?? null,
+    years:
+      a.start_date && a.end_date
+        ? `${a.start_date} – ${a.end_date}`
+        : a.start_date || null,
+    grades: a.grades ?? [],
+    start_date: a.start_date || null,
+    end_date: a.end_date || null,
+    in_progress: a.in_progress ?? false,
+    hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
+    weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
+    tags: a.tags ?? [],
+  });
+
+  const awardFields = (a: ImportAward) => ({
+    name: a.name?.trim() ?? "Untitled",
+    organization: a.organization || null,
+    scope: a.scope || null,
+    level: a.level || null,
+    year: a.year || null,
+    description: a.description || null,
+    tags: a.tags ?? [],
+  });
 
   // --- Activities ---
-  if (activities.length) {
+  const newActivities = activities.filter((a) => !a._replaceId);
+  const replaceActivities = activities.filter((a) => a._replaceId);
+
+  if (newActivities.length) {
     const { data: existing } = await supabase
       .from("activities")
       .select("sort_order")
@@ -863,25 +902,9 @@ export async function commitImportedActivities(
       .limit(1);
     let nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
 
-    const rows = activities.map((a) => ({
+    const rows = newActivities.map((a) => ({
       user_id: user.id,
-      name: a.name?.trim() ?? "Untitled",
-      category: a.category ?? null,
-      position: a.position ?? null,
-      description: a.description ?? null,
-      role: a.position ?? null,
-      impact: a.description ?? null,
-      years:
-        a.start_date && a.end_date
-          ? `${a.start_date} – ${a.end_date}`
-          : a.start_date || null,
-      grades: a.grades ?? [],
-      start_date: a.start_date || null,
-      end_date: a.end_date || null,
-      in_progress: a.in_progress ?? false,
-      hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
-      weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
-      tags: a.tags ?? [],
+      ...activityFields(a),
       sort_order: nextOrder++,
     }));
 
@@ -890,8 +913,21 @@ export async function commitImportedActivities(
     activityCount = rows.length;
   }
 
+  for (const a of replaceActivities) {
+    const { error } = await supabase
+      .from("activities")
+      .update({ ...activityFields(a), updated_at: new Date().toISOString() })
+      .eq("id", a._replaceId!)
+      .eq("user_id", user.id);
+    if (error) return { ok: false as const, error: error.message };
+    replacedCount++;
+  }
+
   // --- Awards ---
-  if (awards.length) {
+  const newAwards = awards.filter((a) => !a._replaceId);
+  const replaceAwards = awards.filter((a) => a._replaceId);
+
+  if (newAwards.length) {
     const { data: existing } = await supabase
       .from("awards")
       .select("sort_order")
@@ -900,15 +936,9 @@ export async function commitImportedActivities(
       .limit(1);
     let nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
 
-    const rows = awards.map((a) => ({
+    const rows = newAwards.map((a) => ({
       user_id: user.id,
-      name: a.name?.trim() ?? "Untitled",
-      organization: a.organization || null,
-      scope: a.scope || null,
-      level: a.level || null,
-      year: a.year || null,
-      description: a.description || null,
-      tags: a.tags ?? [],
+      ...awardFields(a),
       sort_order: nextOrder++,
     }));
 
@@ -917,8 +947,18 @@ export async function commitImportedActivities(
     awardCount = rows.length;
   }
 
+  for (const a of replaceAwards) {
+    const { error } = await supabase
+      .from("awards")
+      .update({ ...awardFields(a), updated_at: new Date().toISOString() })
+      .eq("id", a._replaceId!)
+      .eq("user_id", user.id);
+    if (error) return { ok: false as const, error: error.message };
+    replacedCount++;
+  }
+
   revalidatePath("/dashboard");
-  return { ok: true as const, activityCount, awardCount };
+  return { ok: true as const, activityCount, awardCount, replacedCount };
 }
 
 const linkedGoalSchema = z.object({
