@@ -6,6 +6,7 @@ export type Note = {
   body: string;
   category: string;
   activity_id: string | null;
+  award_id?: string | null;
   created_at: string;
   updated_at?: string | null;
 };

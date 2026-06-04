@@ -32,12 +32,14 @@ const taskSchema = z.object({
 const guidedSessionSchema = z.object({
   session_type: z.string().min(2).max(80),
   session_label: z.string().min(2).max(120),
-  session_focus: z.string().max(240).optional(),
+  session_focus: z.string().max(600).optional(),
   interaction_mode: z.enum(["voice", "chat", "mixed"]),
   transcript: z.string().max(20000).optional(),
   prompt_answers: z.string().optional(),
   note_title: z.string().min(2).max(120),
   note_body: z.string().min(2).max(6000),
+  activity_id: z.string().uuid().optional(),
+  award_id: z.string().uuid().optional(),
 });
 
 const guidedPromptAnswerSchema = z.array(
@@ -268,6 +270,8 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
     prompt_answers: value(formData, "prompt_answers"),
     note_title: value(formData, "note_title"),
     note_body: value(formData, "note_body"),
+    activity_id: value(formData, "activity_id") || undefined,
+    award_id: value(formData, "award_id") || undefined,
   });
   const promptAnswers = parsePromptAnswers(parsed.prompt_answers);
   const answeredCount = promptAnswers.filter((item) => item.answer?.trim()).length;
@@ -279,6 +283,8 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
       title: parsed.note_title,
       body: parsed.note_body,
       category: `Guided: ${parsed.session_type}`.slice(0, 40),
+      activity_id: parsed.activity_id ?? null,
+      award_id: parsed.award_id ?? null,
     })
     .select("id")
     .single();

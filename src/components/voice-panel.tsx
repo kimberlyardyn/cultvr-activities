@@ -245,6 +245,14 @@ export function VoicePanel({
   const isLive = status === "live";
   const isConnecting = status === "connecting";
   const isStopping = isLive;
+  const statusLabel =
+    status === "live"
+      ? "Live"
+      : status === "connecting"
+        ? "Connecting…"
+        : status === "error"
+          ? "Connection error"
+          : null;
   const actionLabel = isLive ? "Stop" : isConnecting ? "Starting..." : "Start";
   const actionHint = isLive
     ? "Stop the current voice session."
@@ -430,8 +438,9 @@ export function VoicePanel({
               ? "rounded-full bg-[color:var(--almanac-paper)] px-4 py-2 text-sm font-medium text-[color:var(--almanac-ink-soft)]"
               : "rounded-md bg-white px-3 py-2 text-sm font-medium text-[#55615b]"
           }
+          hidden={!statusLabel}
         >
-          {status}
+          {statusLabel}
         </span>
         {onReview ? (
           <button

@@ -269,6 +269,28 @@ export function AlmanacWorkspace({
     });
   };
 
+  // Cross-tab navigation requests (e.g. "Deepen this activity" from the
+  // Activities list) dispatch a window event rather than threading a callback
+  // through every layer. Honor it here with the router-aware setTab.
+  useEffect(() => {
+    function handleNavigate(event: Event) {
+      const next = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (
+        next === "overview" ||
+        next === "sessions" ||
+        next === "activities" ||
+        next === "goals" ||
+        next === "action-plan" ||
+        next === "timeline" ||
+        next === "discover"
+      ) {
+        setTab(next);
+      }
+    }
+    window.addEventListener("cultvr:navigate-tab", handleNavigate);
+    return () => window.removeEventListener("cultvr:navigate-tab", handleNavigate);
+  });
+
   const firstName = customName || getDisplayName(userEmail);
 
   return (
@@ -451,7 +473,9 @@ export function AlmanacWorkspace({
           {tab === "activities" ? <ActivitiesView activities={activities} /> : null}
           {tab === "discover" ? <DiscoverView /> : null}
           {tab === "goals" ? <GoalsView goals={goals} /> : null}
-          {tab === "sessions" ? <GuidedSessionsView notes={notes} /> : null}
+          {tab === "sessions" ? (
+            <GuidedSessionsView activities={activities} awards={awards} notes={notes} />
+          ) : null}
           {tab === "action-plan" ? <ActionPlanView goals={goals} weeklyChallenges={weeklyChallenges} /> : null}
           {tab === "timeline" ? (
             <TimelineView

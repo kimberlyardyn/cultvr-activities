@@ -16,6 +16,8 @@ const requestSchema = z.object({
       content: z.string().min(1).max(4000),
     }),
   ),
+  sessionType: z.string().max(160).optional(),
+  sessionFocus: z.string().max(600).optional(),
 });
 
 export async function POST(request: Request) {
@@ -50,10 +52,17 @@ export async function POST(request: Request) {
   }
 
   const openai = getOpenAI();
+  const { sessionType, sessionFocus } = parsed.data;
   const latestUserText = parsed.data.messages
-    .slice(-8)
+    .slice(-12)
     .map((message) => `${message.role}: ${message.content}`)
     .join("\n");
+
+  const sessionFraming = sessionType
+    ? ` This is a "${sessionType}" session.${
+        sessionFocus ? ` Session focus: ${sessionFocus}.` : ""
+      } Steer the conversation toward that focus, but let the student lead. Ask one specific follow-up question at a time to explore and deepen what they share.`
+    : " Ask one useful follow-up question at a time to deepen the conversation.";
 
   const response = await openai.responses.create({
     model: env.openaiModel,
@@ -61,7 +70,8 @@ export async function POST(request: Request) {
       {
         role: "system",
         content:
-          "You are Cultvr, a concise college counseling assistant for high school students. Personalize responses from the saved student context. Help students reflect, identify concrete achievements, shape goals, and define next tasks. Avoid inventing credentials, outcomes, or personal traits. Ask one useful follow-up when needed. Keep answers structured and under 180 words." +
+          "You are Cultvr, a warm, concise college counseling assistant for high school students. Personalize responses from the saved student context. Help students reflect, identify concrete achievements, shape goals, and define next tasks. Avoid inventing credentials, outcomes, or personal traits. Keep each reply conversational and under 160 words." +
+          sessionFraming +
           (adminInstructions
             ? `\n\nAdministrator guidance you must follow:\n${adminInstructions}`
             : ""),

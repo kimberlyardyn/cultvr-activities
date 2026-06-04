@@ -526,8 +526,39 @@ function ActivityCard({
           onToggle={() => setShowTagging(!showTagging)}
         />
       )}
+
+      {!isSample && activity.id && (
+        <p className="mt-4 border-t border-[color:var(--almanac-rule)] pt-3 text-sm text-[color:var(--almanac-ink-soft)]">
+          Need help fleshing out the details or making this more in-depth?{" "}
+          <button
+            className="font-medium text-[color:var(--almanac-olive)] underline-offset-2 transition hover:underline"
+            onClick={() => startDeepenSession(activity.id)}
+            type="button"
+          >
+            Deepen this activity →
+          </button>
+        </p>
+      )}
       </div>
     </article>
+  );
+}
+
+/**
+ * Hand off to the Guided Session "Deepen Current Activity" flow with this
+ * activity pre-selected. We stash the id in sessionStorage and ask the
+ * workspace (via a window event) to switch to the Sessions tab. This avoids
+ * threading a callback through Workspace → DashboardView → ActivitiesTab →
+ * ActivityCard.
+ */
+function startDeepenSession(activityId: string) {
+  try {
+    sessionStorage.setItem("cultvr-deepen-activity-id", activityId);
+  } catch {
+    /* sessionStorage unavailable — session will just open without preselect */
+  }
+  window.dispatchEvent(
+    new CustomEvent("cultvr:navigate-tab", { detail: { tab: "sessions" } }),
   );
 }
 
