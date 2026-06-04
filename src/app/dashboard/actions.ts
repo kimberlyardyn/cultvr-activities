@@ -123,6 +123,13 @@ function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+/** Coerce a possibly-fractional/invalid number to a rounded integer in range. */
+function toIntInRange(n: unknown, min: number, max: number): number {
+  const num = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(num)) return min;
+  return Math.min(max, Math.max(min, Math.round(num)));
+}
+
 function parsePromptAnswers(raw: string | undefined) {
   if (!raw) return [];
 
@@ -421,8 +428,8 @@ function parseActivityFormData(formData: FormData) {
     start_date: value(formData, "start_date") || undefined,
     end_date: value(formData, "end_date") || undefined,
     in_progress: value(formData, "in_progress") === "true",
-    hours_per_week: Number(value(formData, "hours_per_week")) || 0,
-    weeks_per_year: Number(value(formData, "weeks_per_year")) || 0,
+    hours_per_week: toIntInRange(value(formData, "hours_per_week"), 0, 168),
+    weeks_per_year: toIntInRange(value(formData, "weeks_per_year"), 0, 52),
     tags: parseTags(value(formData, "tags")),
   };
 }
@@ -794,8 +801,10 @@ Use best inference. Leave fields blank/zero/empty array if not specified.`;
     start_date: a.start_date || null,
     end_date: a.end_date || null,
     in_progress: a.in_progress ?? false,
-    hours_per_week: a.hours_per_week ?? 0,
-    weeks_per_year: a.weeks_per_year ?? 0,
+    // The model may return fractional hours (e.g. 0.5). These columns are
+    // integers, so round and clamp to valid ranges.
+    hours_per_week: toIntInRange(a.hours_per_week, 0, 168),
+    weeks_per_year: toIntInRange(a.weeks_per_year, 0, 52),
     tags: a.tags ?? [],
     sort_order: nextOrder++,
   }));
