@@ -546,12 +546,17 @@ function EditModal({
 }) {
   const [title, setTitle] = useState(item.title);
   const [body, setBody] = useState(item.summary ?? "");
+  const [timelineDate, setTimelineDate] = useState(dayKey(item.date));
   const [isPending, startTransition] = useTransition();
 
   const handleSave = useCallback(() => {
     if (!title.trim()) return;
     const fd = new FormData();
     fd.set("id", item.id);
+    // Only send a timeline date if the user actually changed it.
+    if (timelineDate && timelineDate !== dayKey(item.date)) {
+      fd.set("timeline_date", timelineDate);
+    }
     startTransition(async () => {
       if (item.kind === "note") {
         const raw = item.raw as Note;
@@ -589,7 +594,7 @@ function EditModal({
       }
       onClose();
     });
-  }, [item, title, body, onClose]);
+  }, [item, title, body, timelineDate, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm print:hidden">
@@ -631,8 +636,22 @@ function EditModal({
               value={body}
             />
           </label>
+          <label className="block">
+            <span className="text-xs font-medium text-[color:var(--almanac-ink)]">
+              Date on timeline
+            </span>
+            <input
+              className="mt-1 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-2 text-sm outline-none focus:border-[#3F4A66] focus:bg-white"
+              onChange={(e) => setTimelineDate(e.target.value)}
+              type="date"
+              value={timelineDate}
+            />
+            <span className="mt-1 block text-[0.65rem] text-[color:var(--almanac-ink-soft)]">
+              Changes where this entry appears on your timeline.
+            </span>
+          </label>
           <p className="text-[0.65rem] text-[color:var(--almanac-ink-soft)]">
-            For deeper edits (tags, dates, goals), open the dedicated tab.
+            For deeper edits (tags, goals), open the dedicated tab.
           </p>
         </div>
 

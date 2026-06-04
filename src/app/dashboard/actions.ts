@@ -130,6 +130,17 @@ function toIntInRange(n: unknown, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(num)));
 }
 
+/**
+ * Turn a "YYYY-MM-DD" date-input value into an ISO timestamp anchored at noon,
+ * so the timeline's local-date grouping lands on the chosen day regardless of
+ * timezone. Returns null for empty/invalid input.
+ */
+function timelineDateToIso(raw: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const d = new Date(`${raw}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function parsePromptAnswers(raw: string | undefined) {
   if (!raw) return [];
 
@@ -212,12 +223,18 @@ export async function updateNote(formData: FormData) {
   const title = value(formData, "title");
   const body = value(formData, "body");
   if (!id) return;
+  // The timeline shows notes by updated_at ?? created_at, so when the user
+  // explicitly picks a timeline date, set both to that day (otherwise a normal
+  // edit would bump the note to "today").
+  const timelineIso = timelineDateToIso(value(formData, "timeline_date"));
   await supabase
     .from("notes")
     .update({
       ...(title ? { title } : {}),
       ...(body ? { body } : {}),
-      updated_at: new Date().toISOString(),
+      ...(timelineIso
+        ? { created_at: timelineIso, updated_at: timelineIso }
+        : { updated_at: new Date().toISOString() }),
     })
     .eq("id", id)
     .eq("user_id", user.id);
@@ -480,6 +497,9 @@ export async function updateActivity(formData: FormData) {
   });
   const { id, ...updates } = parsed;
 
+  // Optional: move the entry's position on the timeline (its created_at).
+  const timelineIso = timelineDateToIso(value(formData, "timeline_date"));
+
   await supabase
     .from("activities")
     .update({
@@ -489,6 +509,7 @@ export async function updateActivity(formData: FormData) {
       years: updates.start_date && updates.end_date
         ? `${updates.start_date} – ${updates.end_date}`
         : updates.start_date || null,
+      ...(timelineIso ? { created_at: timelineIso } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -624,9 +645,14 @@ export async function updateAwardFull(formData: FormData) {
     ...parseAwardFormData(formData),
   });
   const { id, ...updates } = parsed;
+  const timelineIso = timelineDateToIso(value(formData, "timeline_date"));
   await supabase
     .from("awards")
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({
+      ...updates,
+      ...(timelineIso ? { created_at: timelineIso } : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .eq("user_id", user.id);
   revalidatePath("/dashboard");
