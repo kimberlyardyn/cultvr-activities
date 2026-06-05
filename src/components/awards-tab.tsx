@@ -35,6 +35,7 @@ import {
   updateAwardFull,
 } from "@/app/dashboard/actions";
 import { LinkedGoals } from "@/components/linked-goals";
+import { toast } from "@/components/toast";
 import {
   PendingGoalsEditor,
   type PendingGoal,
@@ -181,8 +182,9 @@ export function AwardsTab({
     if (!confirm("Delete this award? This cannot be undone.")) return;
     const fd = new FormData();
     fd.set("id", id);
-    startTransition(() => {
-      void deleteAward(fd);
+    startTransition(async () => {
+      await deleteAward(fd);
+      toast.success("Award deleted.");
     });
   }, []);
 
@@ -321,10 +323,10 @@ function AwardCard({
   return (
     <article
       className={[
-        "flex gap-4 rounded-2xl border p-5",
+        "flex gap-4 rounded-2xl border p-5 transition",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
-          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)]",
+          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
       ].join(" ")}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
@@ -694,7 +696,7 @@ function AwardEditor({
                 value={newTag}
               />
               <button
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[color:var(--almanac-ink)] px-3 py-2 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[color:var(--almanac-rule)] px-3 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
                 onClick={addCustomTag}
                 type="button"
               >

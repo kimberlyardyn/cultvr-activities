@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   Download,
   Pencil,
   Sparkles,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";
 
+import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import {
   deleteActivity,
@@ -258,12 +260,55 @@ export function TimelineBoard({
       }
     }
     pdf.save(docTitle(ownerName, "Timeline").replace(/[^a-z0-9]+/gi, "-").toLowerCase());
+    toast.success("Timeline downloaded as PDF.");
   }, [dateBuckets, fromDate, toDate, ownerName]);
 
   const totalCount = useMemo(
     () => dateBuckets.reduce((n, [, items]) => n + items.length, 0),
     [dateBuckets],
   );
+
+  // Group the day-buckets under their month (newest month first). Each month
+  // keeps its ordered day-buckets and a running item count for the header.
+  const monthGroups = useMemo(() => {
+    const groups = new Map<string, { days: typeof dateBuckets; count: number }>();
+    for (const [day, items] of dateBuckets) {
+      const mk = monthKey(day);
+      const g = groups.get(mk);
+      if (g) {
+        g.days.push([day, items]);
+        g.count += items.length;
+      } else {
+        groups.set(mk, { days: [[day, items]], count: items.length });
+      }
+    }
+    return Array.from(groups.entries()); // already newest-first (dateBuckets is sorted desc)
+  }, [dateBuckets]);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleMonth = useCallback((mk: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(mk)) next.delete(mk);
+      else next.add(mk);
+      return next;
+    });
+  }, []);
+
+  const jumpToMonth = useCallback((mk: string) => {
+    // Expand it if collapsed, then scroll its header into view.
+    setCollapsed((prev) => {
+      if (!prev.has(mk)) return prev;
+      const next = new Set(prev);
+      next.delete(mk);
+      return next;
+    });
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`tl-month-${mk}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   return (
     <div className="px-5 py-6 md:px-9">
@@ -347,20 +392,82 @@ export function TimelineBoard({
             Nothing here yet. Add an activity, award, note, or challenge — and it will appear on your timeline automatically.
           </p>
         ) : (
-          <div className="relative">
-            {/* Vertical spine — runs the full height behind the date markers */}
-            <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[color:var(--almanac-rule)]" />
+          <div className="flex gap-4">
+            {/* Sticky jump-to-month rail (hidden on small screens + print). */}
+            {monthGroups.length > 1 && (
+              <nav className="sticky top-4 hidden h-fit max-h-[80vh] shrink-0 flex-col gap-1 overflow-y-auto pr-1 md:flex print:hidden">
+                {monthGroups.map(([mk, group]) => (
+                  <button
+                    className="group flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[0.7rem] text-[color:var(--almanac-ink-soft)] transition hover:bg-black/[0.04] hover:text-[color:var(--almanac-ink)]"
+                    key={mk}
+                    onClick={() => jumpToMonth(mk)}
+                    type="button"
+                  >
+                    <span className="whitespace-nowrap font-medium">
+                      {formatMonthShort(mk)}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-black/[0.06] px-1.5 text-[0.6rem] tabular-nums text-[color:var(--almanac-ink-soft)]">
+                      {group.count}
+                    </span>
+                  </button>
+                ))}
+              </nav>
+            )}
 
-            <div className="relative space-y-8">
-              {dateBuckets.map(([day, items]) => (
-                <DateBucket
-                  key={day}
-                  day={day}
-                  items={items}
-                  onEdit={setEditing}
-                  onDelete={handleDelete}
-                />
-              ))}
+            <div className="relative min-w-0 flex-1">
+              {/* Vertical spine — runs the full height behind the date markers */}
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[color:var(--almanac-rule)]" />
+
+              <div className="relative space-y-6">
+                {monthGroups.map(([mk, group]) => {
+                  const isCollapsed = collapsed.has(mk);
+                  return (
+                    <section key={mk}>
+                      {/* Month header — centered on the spine, click to collapse. */}
+                      <div
+                        className="relative z-10 mb-4 flex justify-center print:hidden"
+                        id={`tl-month-${mk}`}
+                      >
+                        <button
+                          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-1.5 text-sm font-semibold text-[color:var(--almanac-ink)] shadow-sm transition hover:bg-[color:var(--almanac-paper)]"
+                          onClick={() => toggleMonth(mk)}
+                          type="button"
+                        >
+                          <ChevronDown
+                            className={[
+                              "transition-transform",
+                              isCollapsed ? "-rotate-90" : "",
+                            ].join(" ")}
+                            size={14}
+                          />
+                          {formatMonth(mk)}
+                          <span className="rounded-full bg-black/[0.06] px-1.5 text-[0.65rem] tabular-nums text-[color:var(--almanac-ink-soft)]">
+                            {group.count}
+                          </span>
+                        </button>
+                      </div>
+                      {/* Print: show the month as a plain heading. */}
+                      <h2 className="mb-2 hidden text-lg font-semibold print:block">
+                        {formatMonth(mk)}
+                      </h2>
+
+                      {!isCollapsed && (
+                        <div className="space-y-6">
+                          {group.days.map(([day, items]) => (
+                            <DateBucket
+                              key={day}
+                              day={day}
+                              items={items}
+                              onEdit={setEditing}
+                              onDelete={handleDelete}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -696,6 +803,30 @@ function formatDay(key: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/** "2026-06-14" → "2026-06" */
+function monthKey(dayKeyStr: string): string {
+  return dayKeyStr.slice(0, 7);
+}
+
+/** "2026-06" → "June 2026" */
+function formatMonth(key: string): string {
+  const [y, m] = key.split("-").map((p) => Number(p));
+  if (!y || !m) return key;
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/** "2026-06" → "Jun '26" (compact label for the jump rail) */
+function formatMonthShort(key: string): string {
+  const [y, m] = key.split("-").map((p) => Number(p));
+  if (!y || !m) return key;
+  return `${new Date(y, m - 1, 1).toLocaleDateString(undefined, {
+    month: "short",
+  })} '${String(y).slice(2)}`;
 }
 
 function formatTime(iso: string): string {

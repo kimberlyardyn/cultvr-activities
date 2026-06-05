@@ -33,6 +33,7 @@ import {
   type VoiceFieldUpdate,
 } from "@/components/activity-voice-coach";
 import { LinkedGoals } from "@/components/linked-goals";
+import { toast } from "@/components/toast";
 import {
   PendingGoalsEditor,
   type PendingGoal,
@@ -226,8 +227,9 @@ export function ActivitiesTab({
     if (!confirm("Delete this activity? This cannot be undone.")) return;
     const fd = new FormData();
     fd.set("id", id);
-    startTransition(() => {
-      void deleteActivity(fd);
+    startTransition(async () => {
+      await deleteActivity(fd);
+      toast.success("Activity deleted.");
     });
   }, []);
 
@@ -428,10 +430,10 @@ function ActivityCard({
   return (
     <article
       className={[
-        "flex gap-4 rounded-2xl border p-5",
+        "flex gap-4 rounded-2xl border p-5 transition",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
-          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)]",
+          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
       ].join(" ")}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
@@ -1108,7 +1110,7 @@ function ActivityEditor({
                 onEnter={addCustomTag}
               />
               <button
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[color:var(--almanac-ink)] px-3 py-2 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[color:var(--almanac-rule)] px-3 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
                 onClick={addCustomTag}
                 type="button"
               >
@@ -1290,7 +1292,6 @@ function ResumeImportModal({
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [reviewItems, setReviewItems] = useState<ReviewActivity[]>([]);
   const [reviewAwards, setReviewAwards] = useState<ReviewAward[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -1373,10 +1374,11 @@ function ResumeImportModal({
         if (added) parts.push(`Added ${added} ${added === 1 ? "item" : "items"}`);
         if (res.replacedCount)
           parts.push(`replaced ${res.replacedCount} ${res.replacedCount === 1 ? "item" : "items"}`);
-        setSuccess(`${parts.join(", ") || "Done"}. Closing…`);
-        setTimeout(() => onClose(), 1400);
+        toast.success(`${parts.join(", ") || "Import complete"}.`);
+        onClose();
       } else {
         setError(res.error);
+        toast.error(res.error);
       }
     });
   }, [reviewItems, reviewAwards, existingActivityMap, existingAwardMap, onClose]);
@@ -1546,11 +1548,6 @@ function ResumeImportModal({
                 {error}
               </div>
             )}
-            {success !== null && (
-              <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-700">
-                {success}
-              </div>
-            )}
           </div>
         )}
 
@@ -1589,7 +1586,7 @@ function ResumeImportModal({
             ) : (
               <button
                 className="rounded-full bg-[color:var(--almanac-ink)] px-5 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
-                disabled={isPending || includedCount === 0 || success !== null}
+                disabled={isPending || includedCount === 0}
                 onClick={handleCommit}
                 type="button"
               >

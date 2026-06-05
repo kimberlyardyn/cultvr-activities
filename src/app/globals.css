@@ -37,6 +37,18 @@ button {
   cursor: pointer;
 }
 
+/* Toast entrance — slides up + fades in from the bottom-right stack. */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Login card mode-switch fade — used by the form + helper text on /login
    so the new content fades in when the user toggles Sign in / Create / Magic link. */
 @keyframes loginFadeIn {

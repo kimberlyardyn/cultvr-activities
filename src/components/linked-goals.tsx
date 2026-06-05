@@ -116,7 +116,7 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
         </button>
         {!readonly && open && !adding && (
           <button
-            className="inline-flex items-center gap-1 rounded-full bg-[color:var(--almanac-ink)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+            className="inline-flex items-center gap-1 rounded-full border border-[color:var(--almanac-rule)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
             onClick={() => setAdding(true)}
             type="button"
           >

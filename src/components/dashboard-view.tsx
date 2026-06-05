@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 
 import { ActivitiesTab } from "@/components/activities-tab";
 import { AwardsTab } from "@/components/awards-tab";
+import { toast } from "@/components/toast";
 import { WeeklyChallengeTab } from "@/components/weekly-challenge-tab";
 import {
   createCollegeListEntry,
@@ -1716,10 +1717,12 @@ function CollegeListForm() {
         }
         form.reset();
         setActionPlanDest("none");
+        toast.success(name ? `Added "${name}" to your targets.` : "Target added.");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to add target.";
         console.error("Add target failed:", err);
         setError(message);
+        toast.error(message);
       }
     });
   }

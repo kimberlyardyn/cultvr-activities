@@ -28,6 +28,7 @@ import {
   updateStudentAdmissionsProfile,
 } from "@/app/dashboard/actions";
 import { AdminInstructionsSection } from "@/components/admin-instructions-section";
+import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
@@ -927,21 +928,16 @@ function DangerAction({
   onConfirm: () => Promise<string>;
 }) {
   const [stage, setStage] = useState<"idle" | "confirming" | "running" | "done">("idle");
-  const [message, setMessage] = useState<string | null>(null);
 
   async function run() {
     setStage("running");
-    setMessage(null);
     try {
       const result = await onConfirm();
-      setMessage(result);
+      toast.success(result);
       setStage("done");
-      setTimeout(() => {
-        setStage("idle");
-        setMessage(null);
-      }, 2500);
+      setTimeout(() => setStage("idle"), 2000);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Something went wrong.");
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
       setStage("idle");
     }
   }
@@ -978,9 +974,6 @@ function DangerAction({
         >
           {stage === "running" ? "Deleting…" : stage === "done" ? "Done" : confirmLabel}
         </button>
-      )}
-      {message && stage !== "confirming" && (
-        <p className="mt-2 text-[0.68rem] text-[color:var(--almanac-ink-soft)]">{message}</p>
       )}
     </div>
   );
@@ -1514,6 +1507,7 @@ function ActionPlanView({
     }
 
     pdf.save(docTitle(ownerName, "Action Plan").replace(/[^a-z0-9]+/gi, "-").toLowerCase());
+    toast.success("Action Plan downloaded as PDF.");
   }
 
   function updateStore(updater: (prev: PlanStore) => PlanStore) {

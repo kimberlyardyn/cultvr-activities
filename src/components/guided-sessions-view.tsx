@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { createGuidedSessionArtifacts } from "@/app/dashboard/actions";
+import { toast } from "@/components/toast";
 import { VoicePanel } from "@/components/voice-panel";
 import type { Activity, Award, Note } from "@/lib/types";
 
@@ -398,10 +399,13 @@ export function GuidedSessionsView({
         addSessionToActionPlan(actionPlanWindow, draftNoteTitle);
       }
       setSaveState("saved");
+      toast.success("Session saved.");
     } catch (error) {
       console.error("Save session failed:", error);
-      setSaveError(error instanceof Error ? error.message : "Failed to save session.");
+      const message = error instanceof Error ? error.message : "Failed to save session.";
+      setSaveError(message);
       setSaveState("error");
+      toast.error(message);
     }
   }
 
