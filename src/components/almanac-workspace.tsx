@@ -863,6 +863,125 @@ function PrefsPopup({
           ))}
         </div>
       </div>
+
+      {/* Danger zone — bulk-reset destructive actions, intentionally last. */}
+      <DangerZone />
+    </div>
+  );
+}
+
+function DangerZone() {
+  return (
+    <details className="border-t border-[color:var(--almanac-rule)] py-3.5">
+      <summary className="cursor-pointer list-none text-[0.88rem] font-medium text-[#b0432e]">
+        Danger zone
+      </summary>
+      <p className="mt-2 text-[0.7rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+        These actions permanently delete your data and cannot be undone.
+      </p>
+      <div className="mt-3 grid gap-2">
+        <DangerAction
+          confirmLabel="Delete all guided sessions"
+          description="Removes every saved guided session and the notes generated from them. Activity/award links survive but the sessions and their summaries are gone."
+          label="Delete all guided sessions"
+          onConfirm={async () => {
+            const { deleteAllGuidedSessions } = await import("@/app/dashboard/actions");
+            const res = await deleteAllGuidedSessions();
+            return res.ok ? `Deleted ${res.count} session${res.count === 1 ? "" : "s"}.` : res.error;
+          }}
+        />
+        <DangerAction
+          confirmLabel="Delete all activities"
+          description="Removes every activity. Linked notes and goals stay but lose the activity reference."
+          label="Delete all activities"
+          onConfirm={async () => {
+            const { deleteAllActivities } = await import("@/app/dashboard/actions");
+            const res = await deleteAllActivities();
+            return res.ok ? `Deleted ${res.count} activit${res.count === 1 ? "y" : "ies"}.` : res.error;
+          }}
+        />
+        <DangerAction
+          confirmLabel="Delete all awards"
+          description="Removes every award. Linked notes and goals stay but lose the award reference."
+          label="Delete all awards"
+          onConfirm={async () => {
+            const { deleteAllAwards } = await import("@/app/dashboard/actions");
+            const res = await deleteAllAwards();
+            return res.ok ? `Deleted ${res.count} award${res.count === 1 ? "" : "s"}.` : res.error;
+          }}
+        />
+      </div>
+    </details>
+  );
+}
+
+function DangerAction({
+  confirmLabel,
+  description,
+  label,
+  onConfirm,
+}: {
+  confirmLabel: string;
+  description: string;
+  label: string;
+  onConfirm: () => Promise<string>;
+}) {
+  const [stage, setStage] = useState<"idle" | "confirming" | "running" | "done">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function run() {
+    setStage("running");
+    setMessage(null);
+    try {
+      const result = await onConfirm();
+      setMessage(result);
+      setStage("done");
+      setTimeout(() => {
+        setStage("idle");
+        setMessage(null);
+      }, 2500);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Something went wrong.");
+      setStage("idle");
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[#b0432e]/25 bg-[#b0432e]/[0.04] p-3">
+      <p className="text-[0.78rem] font-medium text-[color:var(--almanac-ink)]">{label}</p>
+      <p className="mt-1 text-[0.68rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+        {description}
+      </p>
+      {stage === "confirming" ? (
+        <div className="mt-2 flex gap-2">
+          <button
+            className="h-8 rounded-md bg-[#b0432e] px-3 text-[0.72rem] font-medium text-white transition hover:bg-[#9a3826]"
+            onClick={run}
+            type="button"
+          >
+            Yes, delete forever
+          </button>
+          <button
+            className="h-8 rounded-md border border-[color:var(--almanac-rule)] px-3 text-[0.72rem] font-medium text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)]"
+            onClick={() => setStage("idle")}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          className="mt-2 h-8 rounded-md border border-[#b0432e]/40 px-3 text-[0.72rem] font-medium text-[#b0432e] transition hover:bg-[#b0432e]/10 disabled:opacity-60"
+          disabled={stage === "running"}
+          onClick={() => setStage("confirming")}
+          type="button"
+        >
+          {stage === "running" ? "Deleting…" : stage === "done" ? "Done" : confirmLabel}
+        </button>
+      )}
+      {message && stage !== "confirming" && (
+        <p className="mt-2 text-[0.68rem] text-[color:var(--almanac-ink-soft)]">{message}</p>
+      )}
     </div>
   );
 }

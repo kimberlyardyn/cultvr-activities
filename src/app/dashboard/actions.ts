@@ -1332,6 +1332,65 @@ export async function addAdminDocumentInstruction(formData: FormData) {
   return { ok: true as const };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Bulk-reset actions — invoked from Settings → Danger zone. Each scopes to
+// the calling user only (RLS would catch a slip, but the explicit `.eq`
+// makes intent unambiguous). Linked notes/goals stay (their FKs are
+// `on delete set null`); the linked rows just lose the reference.
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function deleteAllGuidedSessions(): Promise<
+  { ok: true; count: number } | { ok: false; error: string }
+> {
+  const { supabase, user } = await requireUser();
+
+  // guided_session_answers + guided_session_turns are FK'd with `on delete
+  // cascade`, so deleting the parent rows cleans them up automatically.
+  const { count: sessionCount, error: sessionErr } = await supabase
+    .from("guided_sessions")
+    .delete({ count: "exact" })
+    .eq("user_id", user.id);
+  if (sessionErr) return { ok: false as const, error: sessionErr.message };
+
+  // Also wipe the "Guided: …" summary notes those sessions produced — the
+  // session and its saved note are conceptually one artifact to the user.
+  const { error: noteErr } = await supabase
+    .from("notes")
+    .delete()
+    .eq("user_id", user.id)
+    .like("category", "Guided:%");
+  if (noteErr) return { ok: false as const, error: noteErr.message };
+
+  revalidatePath("/dashboard");
+  return { ok: true as const, count: sessionCount ?? 0 };
+}
+
+export async function deleteAllActivities(): Promise<
+  { ok: true; count: number } | { ok: false; error: string }
+> {
+  const { supabase, user } = await requireUser();
+  const { count, error } = await supabase
+    .from("activities")
+    .delete({ count: "exact" })
+    .eq("user_id", user.id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const, count: count ?? 0 };
+}
+
+export async function deleteAllAwards(): Promise<
+  { ok: true; count: number } | { ok: false; error: string }
+> {
+  const { supabase, user } = await requireUser();
+  const { count, error } = await supabase
+    .from("awards")
+    .delete({ count: "exact" })
+    .eq("user_id", user.id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const, count: count ?? 0 };
+}
+
 export async function deleteAdminInstruction(id: string) {
   const admin = await getAdminContext();
   if (!admin) return { ok: false as const, error: "Not authorized." };

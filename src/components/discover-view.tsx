@@ -26,7 +26,10 @@ type TabDef = {
   icon: ComponentType<{ size?: number; className?: string }>;
   color: string;
   blurb: string;
-  resources: Resource[];
+  /** Flat list of resources for tabs that don't need subgrouping. */
+  resources?: Resource[];
+  /** Optional grouped layout — each section renders with its own heading. */
+  sections?: { title: string; resources: Resource[] }[];
 };
 
 const TABS: TabDef[] = [
@@ -39,7 +42,7 @@ const TABS: TabDef[] = [
     icon: Calendar,
     color: "#4e5b7a",
     blurb:
-      "Where to apply, how to research fit, and how to keep deadlines in view.",
+      "Application Portals, College Research, and Deadlines.",
     resources: [
       // --- Applications & deadlines ---
       {
@@ -99,52 +102,82 @@ const TABS: TabDef[] = [
     color: "#9b7ab8",
     blurb:
       "Explore academic majors, what graduates actually do, and where careers lead.",
-    resources: [
+    sections: [
       {
-        title: "BigFuture Major & Career Search",
-        description:
-          "Browse hundreds of majors with median salaries, related careers, and which schools offer them.",
-        url: "https://bigfuture.collegeboard.org/explore-careers",
-        badge: "Free",
+        title: "Majors",
+        resources: [
+          {
+            title: "BigFuture Major & Career Search",
+            description:
+              "Browse hundreds of majors with median salaries, related careers, and which schools offer them.",
+            url: "https://bigfuture.collegeboard.org/explore-careers",
+            badge: "Free",
+          },
+          {
+            title: "MyMajors Quiz",
+            description:
+              "Free assessment that suggests majors based on interests and abilities.",
+            url: "https://www.mymajors.com/",
+            badge: "Quiz",
+          },
+          {
+            title: "What Can I Do With This Major?",
+            description:
+              "Maps each major to common career paths, employer types, and skills built.",
+            url: "https://whatcanidowiththismajor.com/info.php",
+          },
+          {
+            title: "LinkedIn Field of Study Explorer",
+            description:
+              "See where graduates of a specific major ended up — companies, roles, and grad schools.",
+            url: "https://www.linkedin.com/school/fieldofstudy/",
+          },
+          {
+            title: "Princeton Review: Major Profiles",
+            description:
+              "In-depth profiles of popular majors — what you'll study, what skills you build, and where graduates go.",
+            url: "https://www.princetonreview.com/college-advice/college-majors",
+          },
+          {
+            title: "PayScale College Salary Report",
+            description:
+              "Majors ranked by early- and mid-career salary, with role data for each one.",
+            url: "https://www.payscale.com/college-salary-report/majors",
+            badge: "Data",
+          },
+        ],
       },
       {
-        title: "BLS Occupational Outlook Handbook",
-        description:
-          "Government data on what each job is, what it pays, education needed, and growth outlook.",
-        url: "https://www.bls.gov/ooh/",
-        badge: "Free",
-      },
-      {
-        title: "CareerOneStop",
-        description:
-          "U.S. Department of Labor's official career exploration hub: assessments, guidance, and local service finders.",
-        url: "https://www.careeronestop.org/",
-        badge: "Free",
-      },
-      {
-        title: "MyMajors Quiz",
-        description: "Free assessment that suggests majors based on interests and abilities.",
-        url: "https://www.mymajors.com/",
-        badge: "Quiz",
-      },
-      {
-        title: "Roadtrip Nation",
-        description:
-          "Video interviews with professionals across hundreds of fields — great for exploration.",
-        url: "https://roadtripnation.com/",
-        badge: "Free",
-      },
-      {
-        title: "What Can I Do With This Major?",
-        description:
-          "Maps each major to common career paths, employer types, and skills built.",
-        url: "https://whatcanidowiththismajor.com/info.php",
-      },
-      {
-        title: "LinkedIn Field of Study Explorer",
-        description:
-          "See where graduates of a specific major ended up — companies, roles, and grad schools.",
-        url: "https://www.linkedin.com/school/fieldofstudy/",
+        title: "Careers",
+        resources: [
+          {
+            title: "BLS Occupational Outlook Handbook",
+            description:
+              "Government data on what each job is, what it pays, education needed, and growth outlook.",
+            url: "https://www.bls.gov/ooh/",
+            badge: "Free",
+          },
+          {
+            title: "Roadtrip Nation",
+            description:
+              "Video interviews with professionals across hundreds of fields — great for exploration.",
+            url: "https://roadtripnation.com/",
+            badge: "Free",
+          },
+          {
+            title: "CareerExplorer",
+            description:
+              "Free interest + personality assessment that matches you to specific careers with detailed profiles.",
+            url: "https://www.careerexplorer.com/",
+            badge: "Quiz",
+          },
+          {
+            title: "LinkedIn Career Explorer",
+            description:
+              "Discover roles based on your existing skills, see what's missing, and chart a career path.",
+            url: "https://linkedin.github.io/career-explorer/",
+          },
+        ],
       },
     ],
   },
@@ -190,6 +223,13 @@ const TABS: TabDef[] = [
           "Online mentorship platform pairing students with professionals.",
         url: "https://www.icouldbe.org/",
       },
+      {
+        title: "CareerVillage",
+        description:
+          "Free Q&A platform — post real career questions and get answers from working professionals.",
+        url: "https://www.careervillage.org/",
+        badge: "Free",
+      },
     ],
   },
 
@@ -212,14 +252,6 @@ const TABS: TabDef[] = [
         url: "https://www.themuse.com/coaching",
         badge: "Career",
       },
-      {
-        title: "LinkedIn Career Explorer",
-        description:
-          "Discover roles based on your existing skills, see what's missing, and chart a career path.",
-        url: "https://linkedin.github.io/career-explorer/",
-        badge: "Career",
-      },
-
       // --- Private college admissions partners ---
       {
         title: "Savant Seal",
@@ -232,7 +264,7 @@ const TABS: TabDef[] = [
         title: "Bonday Education",
         description:
           "Personalized academic mentorship and college planning, including STEM-focused enrichment.",
-        url: "https://www.bondayeducation.com",
+        url: "https://www.bonday.com/",
         badge: "Partner · Admissions",
       },
     ],
@@ -300,11 +332,28 @@ export function DiscoverView() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {tab.resources.map((r) => (
-            <ResourceCard key={r.url} resource={r} accent={tab.color} />
-          ))}
-        </div>
+        {tab.sections ? (
+          <div className="grid gap-6">
+            {tab.sections.map((section) => (
+              <div key={section.title}>
+                <h3 className="mb-3 font-serif text-lg leading-tight text-[color:var(--almanac-ink)]">
+                  {section.title}
+                </h3>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {section.resources.map((r) => (
+                    <ResourceCard accent={tab.color} key={r.url} resource={r} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {(tab.resources ?? []).map((r) => (
+              <ResourceCard accent={tab.color} key={r.url} resource={r} />
+            ))}
+          </div>
+        )}
 
         <p className="mt-8 text-xs italic text-[color:var(--almanac-ink-soft)]">
           Cards link to external sites. Want a resource added? Contact us to suggest an addition.

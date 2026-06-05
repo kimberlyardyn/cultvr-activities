@@ -1119,21 +1119,16 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-4 md:p-5">
-      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-[0.68rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-            Knowledge graph
-          </p>
-          <h2 className="mt-1 font-serif text-2xl leading-tight text-[color:var(--almanac-ink)]">
-            What keeps coming up
-          </h2>
-        </div>
+      <div className="flex flex-col gap-1">
+        <p className="text-[0.68rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
+          Knowledge Graph
+        </p>
         <p className="max-w-sm text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
-          Patterns emerging from your sessions and notes.
+          Patterns emerging from your sessions and activities.
         </p>
       </div>
 
-      <div className="mt-4 h-56 overflow-hidden rounded-2xl border border-white/10 bg-[#050728] p-2 shadow-inner">
+      <div className="mt-4 h-56 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#2e3138] via-[#23262c] to-[#2a2d34] p-2 shadow-inner">
           <svg className="h-full w-full" viewBox="0 0 760 230" role="img" aria-label="Session keyword knowledge graph">
             <defs>
               <filter id="knowledge-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -1143,7 +1138,147 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
+              {/* Soft blur for aurora ribbons. */}
+              <filter id="aurora-blur" x="-10%" y="-10%" width="120%" height="120%">
+                <feGaussianBlur stdDeviation="6" />
+              </filter>
+              {/* Animated dashed-line gradient so links subtly "flow" between nodes. */}
+              <linearGradient id="link-flow" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="rgba(236,242,255,0.15)" />
+                <stop offset="50%" stopColor="rgba(236,242,255,0.7)" />
+                <stop offset="100%" stopColor="rgba(236,242,255,0.15)" />
+                <animate
+                  attributeName="x1"
+                  dur="6s"
+                  from="-100%"
+                  repeatCount="indefinite"
+                  to="100%"
+                />
+                <animate
+                  attributeName="x2"
+                  dur="6s"
+                  from="0%"
+                  repeatCount="indefinite"
+                  to="200%"
+                />
+              </linearGradient>
+              {/* Drifting purple nebula cloud — brighter now. */}
+              <radialGradient id="nebula-purple" cx="30%" cy="40%" r="50%">
+                <stop offset="0%" stopColor="rgba(210,140,255,0.55)" />
+                <stop offset="60%" stopColor="rgba(140,80,220,0.22)" />
+                <stop offset="100%" stopColor="rgba(110,60,200,0)" />
+                <animate attributeName="cx" dur="24s" values="30%;65%;30%" repeatCount="indefinite" />
+                <animate attributeName="cy" dur="19s" values="40%;55%;40%" repeatCount="indefinite" />
+              </radialGradient>
+              {/* Drifting cyan/magenta nebula on a different timing. */}
+              <radialGradient id="nebula-cyan" cx="75%" cy="65%" r="45%">
+                <stop offset="0%" stopColor="rgba(140,200,255,0.5)" />
+                <stop offset="55%" stopColor="rgba(255,120,200,0.18)" />
+                <stop offset="100%" stopColor="rgba(80,140,255,0)" />
+                <animate attributeName="cx" dur="28s" values="75%;35%;75%" repeatCount="indefinite" />
+                <animate attributeName="cy" dur="22s" values="65%;30%;65%" repeatCount="indefinite" />
+              </radialGradient>
+              {/* Diagonal Milky Way dust band stretching from upper-left to lower-right. */}
+              <linearGradient id="milky-way" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+                <stop offset="40%" stopColor="rgba(220,200,255,0.18)" />
+                <stop offset="50%" stopColor="rgba(255,235,210,0.28)" />
+                <stop offset="60%" stopColor="rgba(200,180,255,0.18)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+              </linearGradient>
+              {/* Aurora ribbon — emerald → teal → magenta vertical fade. */}
+              <linearGradient id="aurora-green" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(120,255,200,0)" />
+                <stop offset="40%" stopColor="rgba(110,240,180,0.55)" />
+                <stop offset="70%" stopColor="rgba(140,200,255,0.45)" />
+                <stop offset="100%" stopColor="rgba(180,140,255,0)" />
+              </linearGradient>
+              {/* Aurora ribbon 2 — pink/violet for warmth. */}
+              <linearGradient id="aurora-pink" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(255,180,230,0)" />
+                <stop offset="50%" stopColor="rgba(255,140,210,0.4)" />
+                <stop offset="100%" stopColor="rgba(180,100,255,0)" />
+              </linearGradient>
             </defs>
+
+            {/* Nebula backdrop — two drifting clouds layered behind everything. */}
+            <rect width="760" height="230" fill="url(#nebula-purple)" />
+            <rect width="760" height="230" fill="url(#nebula-cyan)" />
+
+            {/* Milky Way diagonal dust band — a rotated soft strip across the field. */}
+            <g transform="translate(380 115) rotate(-15) translate(-380 -115)">
+              <rect
+                x="-100"
+                y="80"
+                width="960"
+                height="70"
+                fill="url(#milky-way)"
+                opacity="0.85"
+              />
+            </g>
+
+            {/* Aurora ribbons — wavy curtains that shimmer at the top. */}
+            <g filter="url(#aurora-blur)">
+              <path
+                d="M -20,30 Q 140,5 320,40 T 700,30 Q 760,32 780,35 L 780,90 Q 600,115 380,80 T -20,95 Z"
+                fill="url(#aurora-green)"
+                opacity="0.7"
+              >
+                <animate
+                  attributeName="opacity"
+                  dur="9s"
+                  repeatCount="indefinite"
+                  values="0.45;0.85;0.45"
+                />
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  dur="14s"
+                  repeatCount="indefinite"
+                  values="0 0; 20 -4; 0 0; -20 4; 0 0"
+                />
+              </path>
+              <path
+                d="M -20,60 Q 200,90 400,55 T 780,70 L 780,120 Q 580,150 400,115 T -20,130 Z"
+                fill="url(#aurora-pink)"
+                opacity="0.55"
+              >
+                <animate
+                  attributeName="opacity"
+                  dur="11s"
+                  begin="2s"
+                  repeatCount="indefinite"
+                  values="0.3;0.7;0.3"
+                />
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  dur="17s"
+                  repeatCount="indefinite"
+                  values="0 0; -25 6; 0 0; 25 -6; 0 0"
+                />
+              </path>
+            </g>
+
+            {/* Background starfield. */}
+            {GALAXY_STARS.map((s, i) => (
+              <circle
+                cx={s.x}
+                cy={s.y}
+                fill="white"
+                key={`star-${i}`}
+                opacity={s.bright}
+                r={s.r}
+              >
+                <animate
+                  attributeName="opacity"
+                  begin={`${s.delay}s`}
+                  dur={`${s.dur}s`}
+                  repeatCount="indefinite"
+                  values={`${s.bright * 0.3};${s.bright};${s.bright * 0.3}`}
+                />
+              </circle>
+            ))}
             {graph.links.map((link, index) => {
               const source = nodeMap.get(link.source);
               const target = nodeMap.get(link.target);
@@ -1155,17 +1290,61 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
                   d={`M ${source.x} ${source.y} Q ${midpointX} ${midpointY} ${target.x} ${target.y}`}
                   key={`${link.source}-${link.target}-${index}`}
                   fill="none"
-                  stroke="rgba(236,242,255,0.48)"
+                  stroke="url(#link-flow)"
                   strokeLinecap="round"
                   strokeWidth={Math.max(0.7, link.strength / 42)}
-                />
+                >
+                  <animate
+                    attributeName="opacity"
+                    dur={`${4 + (index % 3)}s`}
+                    values="0.4;0.85;0.4"
+                    repeatCount="indefinite"
+                  />
+                </path>
               );
             })}
-            {positionedNodes.map((node) => {
+            {positionedNodes.map((node, nodeIndex) => {
               const isHub = node.kind === "theme";
-              const radius = isHub ? 6.5 + node.strength / 24 : 4.5 + node.strength / 34;
+              // Bigger bubbles overall, with a stronger correlation to strength
+              // so the more important nodes visibly dominate.
+              const radius = isHub
+                ? 9 + node.strength / 12
+                : 6 + node.strength / 16;
+              // Font size scales with importance too — 10pt baseline, +up-to-4pt
+              // for high-strength nodes; hubs get an extra bump.
+              const fontSize = Math.round(
+                10 + node.strength / 22 + (isHub ? 1.5 : 0),
+              );
+              // Stagger pulse timings so the graph feels alive, not synchronized.
+              const pulseDur = `${3 + ((nodeIndex * 7) % 5)}s`;
+              const pulseDelay = `${(nodeIndex * 0.4) % 2.5}s`;
               return (
                 <g key={node.id}>
+                  {/* Soft halo that pulses outward — only on hub/theme nodes. */}
+                  {isHub && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      fill={nodeFill(node.kind)}
+                      opacity="0.15"
+                      r={radius}
+                    >
+                      <animate
+                        attributeName="r"
+                        dur={pulseDur}
+                        begin={pulseDelay}
+                        values={`${radius};${radius * 2.4};${radius}`}
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        dur={pulseDur}
+                        begin={pulseDelay}
+                        values="0.32;0;0.32"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                  )}
                   <circle
                     cx={node.x}
                     cy={node.y}
@@ -1174,7 +1353,16 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
                     filter={isHub ? "url(#knowledge-glow)" : undefined}
                     stroke="rgba(255,255,255,0.8)"
                     strokeWidth="0.8"
-                  />
+                  >
+                    {/* Subtle "breathing" radius on every node. */}
+                    <animate
+                      attributeName="r"
+                      dur={pulseDur}
+                      begin={pulseDelay}
+                      values={`${radius};${radius * 1.12};${radius}`}
+                      repeatCount="indefinite"
+                    />
+                  </circle>
                   {satelliteOffsets(node.id).map((offset, index) => (
                     <g key={`${node.id}-satellite-${index}`}>
                       <path
@@ -1189,16 +1377,31 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
                         cy={node.y + offset.y}
                         fill={index % 2 === 0 ? "#6df7a6" : "#dbe6ff"}
                         r="1.8"
-                      />
+                      >
+                        {/* Satellites twinkle individually. */}
+                        <animate
+                          attributeName="opacity"
+                          dur={`${2.5 + ((nodeIndex + index) % 4)}s`}
+                          begin={`${(index * 0.3) % 1.5}s`}
+                          values="0.5;1;0.5"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
                     </g>
                   ))}
+                  {/* Label rendered with a dark stroke "halo" behind a white
+                      fill so it stays legible over the nebula background. */}
                   <text
-                    fill="rgba(244,248,255,0.82)"
-                    fontSize="8"
-                    letterSpacing="0"
+                    fill="rgb(255,255,255)"
+                    fontSize={fontSize}
+                    fontWeight={isHub ? 700 : 600}
+                    paintOrder="stroke"
+                    stroke="rgba(28,30,35,0.92)"
+                    strokeLinejoin="round"
+                    strokeWidth={2.5}
                     textAnchor={node.x > 610 ? "end" : "start"}
                     x={node.x > 610 ? node.x - radius - 5 : node.x + radius + 5}
-                    y={node.y + 3}
+                    y={node.y + fontSize / 3}
                   >
                     {node.label}
                   </text>
@@ -1993,15 +2196,34 @@ function buildKnowledgeGraph({
           kind: "action" as const,
         }]
       : [];
-  // Dedupe by id — two memories/signals can slugify to the same id (e.g. two
-  // "leadership" memories → "memory-leadership"), which breaks React keys.
-  const seenNodeIds = new Set<string>();
-  const nodes = [...topSignals, ...memoryNodes, ...activityNodes, ...collegeNodes, ...actionNode]
-    .filter((node) => {
-      if (seenNodeIds.has(node.id)) return false;
-      seenNodeIds.add(node.id);
-      return true;
-    })
+  // Dedupe by id AND by label (case-insensitive). Two nodes can share a label
+  // even with different ids (e.g. activity "Robotics" vs theme "Robotics") —
+  // the user only wants to see each word once. When labels collide we keep the
+  // higher-strength version so the more important node wins.
+  const labelKey = (label: string) =>
+    label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  type AnyNode =
+    | (typeof topSignals)[number]
+    | (typeof memoryNodes)[number]
+    | (typeof activityNodes)[number]
+    | (typeof collegeNodes)[number]
+    | (typeof actionNode)[number];
+  const byLabel = new Map<string, AnyNode>();
+  for (const node of [
+    ...topSignals,
+    ...memoryNodes,
+    ...activityNodes,
+    ...collegeNodes,
+    ...actionNode,
+  ]) {
+    const key = labelKey(node.label);
+    const existing = byLabel.get(key);
+    if (!existing || node.strength > existing.strength) byLabel.set(key, node);
+  }
+  // Order by strength descending so the biggest/most-important nodes are the
+  // ones that survive the slice(0, 8) cap below.
+  const nodes = Array.from(byLabel.values())
+    .sort((a, b) => b.strength - a.strength)
     .slice(0, 8);
 
   if (nodes.length < 4) return dashboardDemo.knowledgeGraph;
@@ -2324,6 +2546,38 @@ function normalizeCollegeSource(source: string): CollegeListItem["source"] {
   return source === "conversation" || source === "imported" ? source : "manual";
 }
 
+/**
+ * Pre-generated starfield positions for the Knowledge Graph nebula background.
+ * Deterministic (seeded LCG) so the same stars appear across renders — defined
+ * at module scope so React never recreates them.
+ */
+const GALAXY_STARS = (() => {
+  let seed = 12345;
+  const next = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const stars: Array<{
+    x: number;
+    y: number;
+    r: number;
+    bright: number;
+    delay: number;
+    dur: number;
+  }> = [];
+  for (let i = 0; i < 70; i++) {
+    stars.push({
+      x: next() * 760,
+      y: next() * 230,
+      r: 0.25 + next() * 0.9,
+      bright: 0.35 + next() * 0.55,
+      delay: next() * 5,
+      dur: 2.5 + next() * 4,
+    });
+  }
+  return stars;
+})();
+
 function layoutGraphNodes(nodes: KnowledgeGraphNode[]) {
   const positions = [
     { x: 382, y: 118 },
@@ -2342,11 +2596,9 @@ function layoutGraphNodes(nodes: KnowledgeGraphNode[]) {
   }));
 }
 
-function nodeFill(kind: KnowledgeGraphNode["kind"]) {
-  if (kind === "theme") return "#58ff9a";
-  if (kind === "activity") return "#eaf0ff";
-  if (kind === "college") return "#8bbdff";
-  return "#f0c76f";
+function nodeFill(_kind: KnowledgeGraphNode["kind"]) {
+  // All bubbles are white — importance is conveyed by size, not color.
+  return "#ffffff";
 }
 
 function satelliteOffsets(seed: string) {
