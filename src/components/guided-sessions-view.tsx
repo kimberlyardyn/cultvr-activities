@@ -1,15 +1,21 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
   useState,
+  useTransition,
   type FormEvent,
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
 
-import { createGuidedSessionArtifacts } from "@/app/dashboard/actions";
+import {
+  createGuidedSessionArtifacts,
+  deleteNote,
+  updateNote,
+} from "@/app/dashboard/actions";
 import { toast } from "@/components/toast";
 import { VoicePanel } from "@/components/voice-panel";
 import type { Activity, Award, Note } from "@/lib/types";
@@ -25,9 +31,17 @@ const sessionTypes = [
     label: "General Brainstorm",
     focus: "Open-ended exploration to surface ideas worth pursuing.",
     opener: "What's been on your mind lately?",
+    // General Brainstorm is intentionally wide-open, so it offers a richer set
+    // of starter questions spanning activities, growth, goals, and reflection.
     prompts: [
       "What's something you've wanted to try but haven't yet?",
       "If nothing were holding you back, what would you start this month?",
+      "What's an activity or class that's felt genuinely exciting lately?",
+      "Where do you want to be a year from now — and what's one step toward it?",
+      "What's a skill or strength you'd love to grow?",
+      "Is there a problem in your school or community you wish someone would fix?",
+      "When do you lose track of time? What are you usually doing?",
+      "What's something you're proud of that you don't talk about much?",
     ],
   },
   {
@@ -37,7 +51,7 @@ const sessionTypes = [
       "Capture a new activity you've started — or explore one you'd like to start — and shape it into a strong entry.",
     opener: "What kind of new activity are you drawn to right now?",
     prompts: [
-      "Something tied to your major, a leadership role, social impact, or pure interest — which feels closest?",
+      "Something tied to your major, a leadership role, social impact, or pure interest — what are you interested in pursuing?",
       "How much time do you realistically have each week for something new?",
     ],
   },
@@ -58,8 +72,8 @@ const sessionTypes = [
     focus: "Find the proof points and meaning inside a win.",
     opener: "Tell me about a win you're proud of.",
     prompts: [
-      "What made this matter to you personally?",
-      "What changed because of it — any numbers you can put to it?",
+      "What is something you've done recently that really mattered to you?",
+      "What was the impact of something you have said or done recently? Any numbers you can put to it?",
     ],
   },
   {
@@ -68,18 +82,18 @@ const sessionTypes = [
     focus: "Frame a setback or difficulty with agency and growth.",
     opener: "What's a challenge that's been weighing on you?",
     prompts: [
-      "What choice did you make in the middle of it?",
-      "What's different about how you think or work now because of it?",
+      "What is something that didn't go as planned?",
+      "Did you recently feel like you stepped out of your comfort zone? Any moments where you felt anxious/nervous/frustrated at first?",
     ],
   },
   {
     id: "academic-exploration",
     label: "Academic Exploration",
     focus: "Connect academic interests to evidence and next steps.",
-    opener: "What subject or problem keeps pulling your attention?",
+    opener: "What subject or problem keeps drawing your interest?",
     prompts: [
-      "What experience proves this interest is real?",
       "What's one thing you'd want to learn or try next academically?",
+      "What's a news article, invention, book, or phenomena that has recently caught your attention?",
     ],
   },
   {
@@ -88,38 +102,100 @@ const sessionTypes = [
     focus: "Explore career directions and what they require.",
     opener: "What kind of work are you curious about lately?",
     prompts: [
-      "What draws you to it — the day-to-day, the impact, or the people?",
-      "What's one small way you could test or learn more about that path?",
+      "When you see yourself in 10 years, what kind of person do you want to be — and what kind of job can help you get there?",
+      "Are there any current activities or achievements that relate to potential career choices for you? What matters the most to you when you think of career - the day-to-day routine, salary, social opportunities, societal impact, job stability, intellectual stimulation, or something else?",
     ],
   },
   {
     id: "goal-setting",
     label: "Goal Setting",
     focus: "Turn intentions into concrete, trackable goals.",
-    opener: "What's one thing you want to make real?",
+    opener: "What's something you would like to accomplish in the next week, month, or year?",
     prompts: [
-      "What's the smallest first step you could take this week?",
-      "How will you know you're making progress?",
+      "What's a new skill you would like to develop?",
+      "What kind of impact do you want to be remembered for in the next 5-10 years?",
     ],
   },
   {
     id: "narrative-mining",
     label: "Narrative Mining",
     focus: "Find the personal stories that can carry an essay.",
-    opener: "Tell me about a moment you still remember clearly.",
+    opener: "What's an experience that you would like to put down in words?",
+    // Narrative Mining has a lot of possible angles, so its starter prompts are
+    // organized into categories the student can pick from. `prompts` keeps a
+    // flat representative set for the voice coach + saved-session summary.
     prompts: [
-      "What did it reveal about your values or how you think?",
-      "What would a reader learn about you that isn't obvious elsewhere?",
+      "What's a memory you find yourself coming back to?",
+      "What's something you've worked on that mattered to you?",
+    ],
+    promptGroups: [
+      {
+        label: "Personal storytelling",
+        questions: [
+          "What's a memory you find yourself coming back to?",
+          "What's an experience that shaped how you see yourself?",
+          "What's a story from your life that feels important, even if you're not sure why?",
+          "What's something that happened to you that changed the way you think?",
+        ],
+      },
+      {
+        label: "Activity reflection",
+        questions: [
+          "What's an activity, project, hobby, or responsibility you want to talk about?",
+          "What's something you've worked on that mattered to you?",
+          "What's a commitment that shows something about who you are?",
+          "What's something you kept showing up for?",
+        ],
+      },
+      {
+        label: "Leadership",
+        questions: [
+          "What do you feel are the most important qualities of strong leaders, and how have you been striving for this?",
+          "When have you taken responsibility for something?",
+          "When have other people relied on you?",
+          "When have you helped a group, project, or person make progress?",
+          "When have you stepped in, even without being asked?",
+        ],
+      },
+      {
+        label: "Values & personal themes",
+        questions: [
+          "What kinds of things naturally matter to you?",
+          "What do you often notice, question, or care about?",
+          "What's a belief, interest, or problem you keep coming back to?",
+          "What feels important to you right now?",
+        ],
+      },
+      {
+        label: "Branding",
+        questions: [
+          "What inspired you to start this product/initiative?",
+          "How do you want people to understand you or your product/initiative?",
+          "What sets you/your product/initiative apart and makes it unique?",
+        ],
+      },
     ],
   },
   {
     id: "interview-prep",
     label: "Interview Prep",
-    focus: "Prepare clear, memorable stories for interviews.",
-    opener: "What's the one thing you want an interviewer to remember about you?",
+    focus: "Practice for interviews with a tailored mock session.",
+    aiGuidance:
+      "Run a tailored mock interview. The student first says what the interview is for. After they answer, reply with ONE short line only (e.g. \"Got it — Yale College.\") and DO NOT list question types — the app shows clickable category buttons for that. When the student picks a category (or 'random mix'), act as the interviewer: ask one realistic question at a time tailored to their goal, wait for the answer, give brief constructive feedback, then continue.",
+    aiGuidanceVoice:
+      "Run a tailored mock interview by voice. The student first says what the interview is for. After they answer, briefly acknowledge it, then ASK OUT LOUD what kinds of questions they'd like to practice — for example: tell me about yourself, why this school or role, strengths and weaknesses, behavioral, situational, or a random mix. Once they choose, act as the interviewer: ask one realistic question at a time tailored to their goal, wait for the answer, give brief feedback, then continue.",
+    opener:
+      "What's this interview for — admission to a certain school or program, a specific job or career path, or just general interview practice?",
+    // Hold the option chips until the student answers the opener, then surface
+    // these clickable question-type choices as the "what to practice" step.
+    deferStarters: true,
     prompts: [
-      "Which experience best shows that quality?",
-      "What's a question you'd actually want to ask them?",
+      "Tell me about yourself",
+      "Why this school / program / role",
+      "Strengths & weaknesses",
+      "Behavioral questions",
+      "Situational questions",
+      "Random mix",
     ],
   },
 ] as const;
@@ -227,14 +303,24 @@ export function GuidedSessionsView({
         .filter(Boolean)
         .join(". ")
     : "";
+  // What the AI actually receives: prefer a session's richer behavior script
+  // over the short display `focus`. Voice mode uses `aiGuidanceVoice` when
+  // present (voice has no clickable chips, so it must ASK options aloud);
+  // otherwise both modes fall back to `aiGuidance`, then `focus`.
+  const voiceGuidance =
+    "aiGuidanceVoice" in selected ? selected.aiGuidanceVoice : undefined;
+  const textGuidance = "aiGuidance" in selected ? selected.aiGuidance : undefined;
+  const baseFocus =
+    (interactionMode === "voice" ? voiceGuidance ?? textGuidance : textGuidance) ??
+    selected.focus;
   const effectiveFocus = (
-    needsActivity && chosenActivity ? `${selected.focus} ${deepenContext}.` : selected.focus
-  ).slice(0, 590);
+    needsActivity && chosenActivity ? `${baseFocus} ${deepenContext}.` : baseFocus
+  ).slice(0, 600);
   // One warm, single-question opener for both voice and text. The deepen
   // session weaves in the chosen activity name so the question is personalized.
   const opener =
     needsActivity && chosenActivity
-      ? `What part of ${chosenActivity.name} feels most alive for you right now?`
+      ? `In what ways do you want to expand your involvement in ${chosenActivity.name}?`
       : selected.opener;
   const voiceOpener = opener;
   const textOpener = opener;
@@ -299,11 +385,24 @@ export function GuidedSessionsView({
   }
 
   function goToReview() {
-    setDraftNoteTitle(`${selected.label}: ${shortDate(new Date().toISOString())}`);
+    setDraftNoteTitle(buildSessionTitle());
     setDraftNoteBody(buildSessionSummary(selected, answers, transcript));
     setSaveState("idle");
     setSaveError(null);
     setMode("review");
+  }
+
+  // Default save title. For Interview Prep, fold in what the interview was for
+  // (the student's first reply to the "what's this for?" opener) →
+  // "Interview Prep: Yale College". Other sessions use "<label>: <date>".
+  function buildSessionTitle(): string {
+    const date = shortDate(new Date().toISOString());
+    if (selected.id === "interview-prep") {
+      const firstAnswer = chatMessages.find((m) => m.role === "user")?.content;
+      const subject = extractInterviewSubject(firstAnswer);
+      if (subject) return `${selected.label}: ${subject}`;
+    }
+    return `${selected.label}: ${date}`;
   }
 
   function goBackToSession() {
@@ -577,7 +676,13 @@ export function GuidedSessionsView({
                   onPickStarter={pickStarter}
                   onReview={goToReview}
                   onSend={sendChat}
+                  deferStarters={
+                    "deferStarters" in selected ? selected.deferStarters : false
+                  }
                   opener={textOpener}
+                  promptGroups={
+                    "promptGroups" in selected ? selected.promptGroups : undefined
+                  }
                   samples={selected.prompts}
                   suggestions={chatSuggestions}
                   transcript={transcript}
@@ -759,18 +864,7 @@ function GuidedNotesPreview({ notes }: { notes: Note[] }) {
         <SectionKicker>Recent guided notes</SectionKicker>
         <div className="mt-4 grid gap-3">
           {notes.slice(0, 8).map((note) => (
-            <article
-              className="rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4"
-              key={note.id}
-            >
-              <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-                {note.category} - {shortDate(note.created_at)}
-              </p>
-              <h3 className="mt-2 font-serif text-xl leading-tight">{note.title}</h3>
-              <p className="mt-2 line-clamp-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-                {note.body}
-              </p>
-            </article>
+            <HistoryNoteCard key={note.id} note={note} />
           ))}
           {!notes.length ? (
             <Empty label="Complete a guided session to create your first saved session note." />
@@ -778,6 +872,120 @@ function GuidedNotesPreview({ notes }: { notes: Note[] }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function HistoryNoteCard({ note }: { note: Note }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(note.title);
+  const [body, setBody] = useState(note.body);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    if (!title.trim() || !body.trim()) return;
+    const fd = new FormData();
+    fd.set("id", note.id);
+    fd.set("title", title.trim());
+    fd.set("body", body.trim());
+    startTransition(async () => {
+      try {
+        await updateNote(fd);
+        toast.success("Session updated.");
+        setEditing(false);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to update session.");
+      }
+    });
+  }
+
+  function remove() {
+    if (!confirm("Delete this saved session? This cannot be undone.")) return;
+    const fd = new FormData();
+    fd.set("id", note.id);
+    startTransition(async () => {
+      try {
+        await deleteNote(fd);
+        toast.success("Session deleted.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to delete session.");
+      }
+    });
+  }
+
+  if (editing) {
+    return (
+      <article className="rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
+        <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+          {note.category} - {shortDate(note.created_at)}
+        </p>
+        <input
+          className="mt-2 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-3 py-2 font-serif text-lg text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Session title"
+          value={title}
+        />
+        <textarea
+          className="mt-2 min-h-32 w-full resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-3 py-2 text-sm leading-6 text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Session summary"
+          value={body}
+        />
+        <div className="mt-3 flex gap-2">
+          <button
+            className="rounded-full bg-[color:var(--almanac-ink)] px-4 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
+            disabled={pending || !title.trim() || !body.trim()}
+            onClick={save}
+            type="button"
+          >
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+          <button
+            className="rounded-full border border-[color:var(--almanac-rule)] px-4 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+            onClick={() => {
+              setTitle(note.title);
+              setBody(note.body);
+              setEditing(false);
+            }}
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="group rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+          {note.category} - {shortDate(note.created_at)}
+        </p>
+        <div className="flex shrink-0 gap-1 opacity-0 transition group-hover:opacity-100">
+          <button
+            aria-label="Edit session"
+            className="rounded-md p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
+            onClick={() => setEditing(true)}
+            type="button"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            aria-label="Delete session"
+            className="rounded-md p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-clay)]"
+            disabled={pending}
+            onClick={remove}
+            type="button"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+      <h3 className="mt-1 font-serif text-xl leading-tight">{note.title}</h3>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+        {note.body}
+      </p>
+    </article>
   );
 }
 
@@ -830,6 +1038,7 @@ function ActivityPicker({
 }
 
 function TextSession({
+  deferStarters = false,
   loading,
   messages,
   onChange,
@@ -838,11 +1047,13 @@ function TextSession({
   onReview,
   onSend,
   opener,
+  promptGroups,
   samples,
   suggestions,
   transcript,
   value,
 }: {
+  deferStarters?: boolean;
   loading: boolean;
   messages: ChatMessage[];
   onChange: (value: string) => void;
@@ -851,18 +1062,34 @@ function TextSession({
   onReview: () => void;
   onSend: (text: string) => void;
   opener: string;
+  promptGroups?: readonly { label: string; questions: readonly string[] }[];
   samples: readonly string[];
   suggestions: string[];
   transcript: string;
   value: string;
 }) {
   const started = messages.length > 0;
-  // Show at most 2 sharply different prompts as chips. Initially hidden —
-  // surfaced via "Not sure where to start?" or auto-revealed after a pause.
-  const chips = (started ? suggestions : samples).slice(0, 2);
+  // `deferStarters`: hold the session's option chips until the student has
+  // replied once (e.g. Interview Prep asks "what's this for?" first, then shows
+  // the practice options). After exactly one student turn, show the session's
+  // own `samples`; on later turns fall back to the AI's follow-up suggestions.
+  const studentTurns = messages.filter((m) => m.role === "user").length;
+  const chips = deferStarters
+    ? studentTurns === 1
+      ? samples
+      : suggestions.slice(0, 2)
+    : started
+      ? suggestions.slice(0, 2)
+      : samples;
+  // Categorized starter questions only show before the chat begins.
+  const showGroups = !started && !!promptGroups?.length;
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [chipsVisible, setChipsVisible] = useState(false);
+  // For grouped prompts: which category is currently expanded (null = none).
+  // "__other__" is the special "write your own question" item.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [customQuestion, setCustomQuestion] = useState("");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -875,17 +1102,34 @@ function TextSession({
 
   // Auto-reveal chips after 8s of inactivity if the user hasn't started typing
   // and the conversation hasn't begun — soft nudge for the stuck student.
+  // Skipped for deferStarters sessions, which reveal their options only after
+  // the first reply (handled below).
   useEffect(() => {
+    if (deferStarters) return;
     if (chipsVisible) return;
     if (started || loading) return;
     if (value.trim()) return;
     const timer = setTimeout(() => setChipsVisible(true), 8000);
     return () => clearTimeout(timer);
-  }, [chipsVisible, started, loading, value]);
+  }, [deferStarters, chipsVisible, started, loading, value]);
+
+  // deferStarters: reveal the option chips automatically once the student has
+  // answered the opener (their first turn), and not before.
+  useEffect(() => {
+    if (!deferStarters) return;
+    setChipsVisible(studentTurns >= 1); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [deferStarters, studentTurns]);
 
   function handlePickStarter(question: string) {
+    if (deferStarters) {
+      // Deferred chips are the student's CHOICE (e.g. which question type to
+      // practice), so send them as a user turn — the AI then responds.
+      onSend(question);
+      return;
+    }
+    // Normal starter chips are the coach ASKING that question; the student then
+    // types their answer.
     onPickStarter(question);
-    // Focus the reply box so the student can answer immediately.
     setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
@@ -902,22 +1146,122 @@ function TextSession({
         <div ref={bottomRef} />
       </div>
 
-      {chips.length && !loading ? (
+      {!loading && (showGroups || chips.length) ? (
         chipsVisible ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {chips.map((q) => (
-              <button
-                className="rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 py-1.5 text-left text-xs leading-snug text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)] disabled:opacity-50"
-                disabled={loading}
-                key={q}
-                onClick={() => handlePickStarter(q)}
-                type="button"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        ) : !started ? (
+          showGroups ? (
+            // Categorized starter questions: pick a category, then a question.
+            <div className="mt-4 grid gap-2">
+              <p className="text-[0.65rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+                Pick a category to explore
+              </p>
+              {promptGroups!.map((group) => {
+                const isOpen = openGroup === group.label;
+                return (
+                  <div
+                    className="overflow-hidden rounded-xl border border-[color:var(--almanac-rule)]"
+                    key={group.label}
+                  >
+                    <button
+                      className="flex w-full items-center justify-between gap-2 bg-[color:var(--almanac-paper-deep)] px-3 py-2 text-left text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-[color:var(--almanac-paper)]"
+                      onClick={() => setOpenGroup(isOpen ? null : group.label)}
+                      type="button"
+                    >
+                      {group.label}
+                      <span className="text-[color:var(--almanac-ink-soft)]">
+                        {isOpen ? "–" : "+"}
+                      </span>
+                    </button>
+                    {isOpen ? (
+                      <div className="flex flex-wrap gap-2 p-2.5">
+                        {group.questions.map((q) => (
+                          <button
+                            className="rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 py-1.5 text-left text-xs leading-snug text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)] disabled:opacity-50"
+                            disabled={loading}
+                            key={q}
+                            onClick={() => handlePickStarter(q)}
+                            type="button"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+
+              {/* Other — let the student write the exact question they want the
+                  coach to ask. */}
+              {(() => {
+                const isOpen = openGroup === "__other__";
+                return (
+                  <div className="overflow-hidden rounded-xl border border-[color:var(--almanac-rule)]">
+                    <button
+                      className="flex w-full items-center justify-between gap-2 bg-[color:var(--almanac-paper-deep)] px-3 py-2 text-left text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-[color:var(--almanac-paper)]"
+                      onClick={() => setOpenGroup(isOpen ? null : "__other__")}
+                      type="button"
+                    >
+                      Other — write your own question
+                      <span className="text-[color:var(--almanac-ink-soft)]">
+                        {isOpen ? "–" : "+"}
+                      </span>
+                    </button>
+                    {isOpen ? (
+                      <div className="flex items-end gap-2 p-2.5">
+                        <textarea
+                          className="min-h-10 flex-1 resize-y rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-2.5 py-1.5 text-xs leading-snug text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                          onChange={(e) => setCustomQuestion(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey && customQuestion.trim()) {
+                              e.preventDefault();
+                              handlePickStarter(customQuestion.trim());
+                              setCustomQuestion("");
+                            }
+                          }}
+                          placeholder="Type the question you'd like to be asked…"
+                          rows={1}
+                          value={customQuestion}
+                        />
+                        <button
+                          className="shrink-0 rounded-full bg-[color:var(--almanac-ink)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-50"
+                          disabled={loading || !customQuestion.trim()}
+                          onClick={() => {
+                            handlePickStarter(customQuestion.trim());
+                            setCustomQuestion("");
+                          }}
+                          type="button"
+                        >
+                          Ask
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-2">
+              {deferStarters && studentTurns === 1 ? (
+                <p className="text-[0.65rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
+                  What would you like to practice?
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {chips.map((q) => (
+                  <button
+                    className="rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 py-1.5 text-left text-xs leading-snug text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)] disabled:opacity-50"
+                    disabled={loading}
+                    key={q}
+                    onClick={() => handlePickStarter(q)}
+                    type="button"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        ) : !started && !deferStarters ? (
           <button
             className="mt-4 text-xs italic text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
             onClick={() => setChipsVisible(true)}
@@ -1177,4 +1521,35 @@ function shortDate(date: string | null) {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return "today";
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(parsed);
+}
+
+/**
+ * Pull a concise interview subject from the student's free-text answer to
+ * "what's this interview for?" → e.g. "It's for Yale College admissions" →
+ * "Yale College". Strips common lead-ins/filler and trims to a short phrase.
+ * Returns null if nothing usable.
+ */
+function extractInterviewSubject(answer: string | undefined): string | null {
+  if (!answer) return null;
+  let s = answer.trim();
+  if (!s) return null;
+
+  // Drop common lead-ins: "it's for", "this is for", "i'm interviewing for", etc.
+  s = s
+    .replace(
+      /^(it'?s?\s+for|this\s+is\s+for|i'?m\s+interviewing\s+for|interview\s+for|for|the|an?|admission\s+to|applying\s+to|a\s+job\s+at|to)\s+/i,
+      "",
+    )
+    .replace(/\.$/, "")
+    .trim();
+
+  if (!s) return null;
+
+  // Keep it short: first line, first clause, capped length.
+  s = s.split(/\n/)[0].split(/[,;–—]| - /)[0].trim();
+  if (s.length > 48) s = `${s.slice(0, 45).trimEnd()}…`;
+
+  // Title-case-ish: leave acronyms/proper nouns as typed; just capitalize the
+  // first letter so "general practice" → "General practice".
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

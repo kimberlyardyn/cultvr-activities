@@ -167,6 +167,19 @@ create table if not exists public.admin_ai_instructions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.feedback_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  user_email text,
+  category text not null default 'question'
+    check (category in ('question', 'bug', 'feedback', 'other')),
+  message text not null,
+  attachment_paths text[] not null default '{}'::text[],
+  status text not null default 'open'
+    check (status in ('open', 'reviewed', 'resolved')),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.guided_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
@@ -289,6 +302,7 @@ alter table public.awards enable row level security;
 alter table public.college_list enable row level security;
 alter table public.documents enable row level security;
 alter table public.admin_ai_instructions enable row level security;
+alter table public.feedback_messages enable row level security;
 alter table public.guided_sessions enable row level security;
 alter table public.guided_session_answers enable row level security;
 alter table public.guided_session_turns enable row level security;
@@ -320,6 +334,16 @@ create policy "student_memories_all_own"
 on public.student_memories for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+drop policy if exists "feedback_insert_own" on public.feedback_messages;
+create policy "feedback_insert_own"
+on public.feedback_messages for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "feedback_select_own" on public.feedback_messages;
+create policy "feedback_select_own"
+on public.feedback_messages for select
+using (auth.uid() = user_id);
 
 drop policy if exists "admin_ai_instructions_read" on public.admin_ai_instructions;
 create policy "admin_ai_instructions_read"

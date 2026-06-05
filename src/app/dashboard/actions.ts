@@ -1247,6 +1247,58 @@ export async function uploadDocument(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+// ── User feedback / contact admin ────────────────────────────────────────────
+
+export async function submitFeedback(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, user } = await requireUser();
+
+  const category = value(formData, "category") || "question";
+  const message = value(formData, "message");
+  if (message.trim().length < 5) {
+    return { ok: false as const, error: "Please add a bit more detail (at least a sentence)." };
+  }
+  if (message.length > 5000) {
+    return { ok: false as const, error: "Message is too long (5000 character max)." };
+  }
+  if (!["question", "bug", "feedback", "other"].includes(category)) {
+    return { ok: false as const, error: "Invalid category." };
+  }
+
+  // Upload any attachments to the existing student_uploads bucket.
+  const files = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length > 5) {
+    return { ok: false as const, error: "Please attach at most 5 files." };
+  }
+  const attachmentPaths: string[] = [];
+  for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) {
+      return { ok: false as const, error: `"${file.name}" is over the 10 MB limit.` };
+    }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `${user.id}/feedback/${Date.now()}-${safeName}`;
+    const { error: upErr } = await supabase.storage
+      .from("student_uploads")
+      .upload(path, file, { upsert: false });
+    if (upErr) {
+      return { ok: false as const, error: `Upload failed: ${upErr.message}` };
+    }
+    attachmentPaths.push(path);
+  }
+
+  const { error } = await supabase.from("feedback_messages").insert({
+    user_id: user.id,
+    user_email: user.email ?? null,
+    category,
+    message: message.trim(),
+    attachment_paths: attachmentPaths,
+  });
+  if (error) return { ok: false as const, error: error.message };
+
+  return { ok: true as const };
+}
+
 // ── Administrator: global AI instructions ────────────────────────────────────
 
 const adminTextInstructionSchema = z.object({

@@ -28,6 +28,7 @@ import {
   updateStudentAdmissionsProfile,
 } from "@/app/dashboard/actions";
 import { AdminInstructionsSection } from "@/components/admin-instructions-section";
+import { ContactAdminSection } from "@/components/contact-admin-section";
 import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import { DashboardView } from "@/components/dashboard-view";
@@ -837,6 +838,9 @@ function PrefsPopup({
           </button>
         </div>
       </details>
+
+      {/* Contact the admin with questions / feedback / bug reports */}
+      <ContactAdminSection />
 
       {/* AI instructions — renders only for the administrator account */}
       <AdminInstructionsSection />
