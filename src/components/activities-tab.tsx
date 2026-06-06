@@ -2057,6 +2057,7 @@ function ExportModal({ activity, onClose }: { activity: Activity; onClose: () =>
           fileBase={`${activity.name}-${formatLabel}`}
           initialText={generated}
           notes={<ExportNotes tab={tab} activity={activity} />}
+          ongoing={activity.in_progress}
         />
       </div>
     </div>
@@ -2217,12 +2218,16 @@ function ExportPreview({
   fileBase,
   initialText,
   notes,
+  ongoing,
 }: {
   charLimit?: number;
   docTitle: string;
   fileBase: string;
   initialText: string;
   notes?: React.ReactNode;
+  /** true = activity is in progress (present-tense verbs); false = past tense.
+   *  undefined = let the model infer from the wording. */
+  ongoing?: boolean;
 }) {
   const [text, setText] = useState(initialText);
   const [copied, setCopied] = useState(false);
@@ -2263,6 +2268,12 @@ function ExportPreview({
     }
     setCondensing(true);
     try {
+      const tenseRule =
+        ongoing === true
+          ? "This activity is ONGOING, so use PRESENT-tense action verbs (e.g. \"Guide…\", \"Manage…\", \"Run…\")."
+          : ongoing === false
+            ? "This activity has ENDED, so use PAST-tense action verbs (e.g. \"Guided…\", \"Managed…\", \"Ran…\")."
+            : "Use present-tense verbs if the activity is ongoing, past-tense if it has ended — infer from the wording.";
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2271,10 +2282,17 @@ function ExportPreview({
             {
               role: "user",
               content:
-                `Rewrite this activity description so it is no more than ${charLimit} characters ` +
-                `(aim for ${Math.floor(charLimit * 0.85)}–${charLimit}). Keep the strongest, most ` +
-                `specific accomplishments and any numbers. Use concise, active phrasing. Return ONLY ` +
-                `the rewritten description, no quotes or labels:\n\n${target}`,
+                `Rewrite this activity description for a college application to pack in as much concrete detail as possible within ${charLimit} characters ` +
+                `(use ${Math.floor(charLimit * 0.9)}–${charLimit} — get as close to the limit as you can). Rules:\n` +
+                `- MAXIMIZE information density. Cut filler, transition, and connector words ("in order to", "as well as", "responsible for", "helped to", "various", "successfully", "a variety of", articles like "the/a" where droppable). Every word should add a fact.\n` +
+                `- Write in first person but DROP the pronouns "I/we/my" — start each phrase with the verb.\n` +
+                `- ${tenseRule}\n` +
+                `- Use semicolons or commas to chain multiple accomplishments compactly rather than full sentences with conjunctions.\n` +
+                `- Keep ALL specific accomplishments, numbers, scale, and outcomes — these are the priority; only cut filler, never substance.\n` +
+                `- Start with a strong action verb; keep verb tense consistent.\n` +
+                `- Describe the student's own actions; if the text clearly says multiple people did something you may note it, but default to their individual contributions.\n` +
+                `- No bullet symbols, no quotes, no labels.\n` +
+                `Return ONLY the rewritten description:\n\n${target}`,
             },
           ],
         }),
@@ -2403,28 +2421,54 @@ function condenseToFit(text: string, limit: number): string {
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean.length <= limit) return clean;
 
-  // Light abbreviations to reclaim characters before trimming words.
+  // Maximize density before trimming words: drop a leading pronoun, strip
+  // common filler/connector phrases, and abbreviate. Goal is to keep facts and
+  // cut only words that don't carry information.
   let s = clean
+    .replace(/^(i|we)\s+/i, "")
+    // Filler / connector phrases → removed or shortened.
+    .replace(/\bin order to\b/gi, "to")
+    .replace(/\bso as to\b/gi, "to")
+    .replace(/\bas well as\b/gi, "&")
+    .replace(/\b(was|am|is|were|are)\s+responsible for\b/gi, "")
+    .replace(/\bresponsible for\b/gi, "")
+    .replace(/\bhelped to\b/gi, "")
+    .replace(/\bworked to\b/gi, "")
+    .replace(/\bin charge of\b/gi, "led")
+    .replace(/\bsuccessfully\b/gi, "")
+    .replace(/\bactively\b/gi, "")
+    .replace(/\beffectively\b/gi, "")
+    .replace(/\ba variety of\b/gi, "")
+    .replace(/\bvarious\b/gi, "")
+    .replace(/\bnumerous\b/gi, "")
+    .replace(/\bin addition\b/gi, "")
+    .replace(/\bfurthermore\b/gi, "")
+    .replace(/\bmoreover\b/gi, "")
+    // Abbreviations.
     .replace(/\band\b/g, "&")
     .replace(/\bwith\b/g, "w/")
     .replace(/\bapproximately\b/gi, "~")
     .replace(/\bpercent\b/gi, "%")
+    // Tidy up doubled spaces / stray punctuation left by removals.
+    .replace(/\s+([,.;])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+  // Capitalize the first letter after edits.
+  s = s.charAt(0).toUpperCase() + s.slice(1);
   if (s.length <= limit) return s;
 
-  const target = Math.floor(limit * 0.75); // stay within 25% of the limit
-
-  // Prefer ending on a complete sentence at/under the limit.
+  // Goal is to PACK the field. Only accept a clean sentence ending if it
+  // already lands very close to the limit (≥90%); otherwise fill word-by-word
+  // right up to the cap.
   const sentences = s.match(/[^.!?]+[.!?]+/g) ?? [];
   let built = "";
   for (const sentence of sentences) {
     if ((built + sentence).trim().length <= limit) built += sentence;
     else break;
   }
-  if (built.trim().length >= target) return built.trim();
+  if (built.trim().length >= Math.floor(limit * 0.9)) return built.trim();
 
-  // Otherwise fill word-by-word up to the limit.
+  // Fill word-by-word up to the limit.
   const words = s.split(" ");
   let out = "";
   for (const w of words) {
