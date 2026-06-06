@@ -29,6 +29,7 @@ import {
 } from "@/app/dashboard/actions";
 import { AdminInstructionsSection } from "@/components/admin-instructions-section";
 import { ContactAdminSection } from "@/components/contact-admin-section";
+import { ResumeProfileSection } from "@/components/resume-profile-section";
 import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import { DashboardView } from "@/components/dashboard-view";
@@ -839,6 +840,9 @@ function PrefsPopup({
         </div>
       </details>
 
+      {/* Resume header — personal details for exported resumes */}
+      <ResumeProfileSection />
+
       {/* Contact the admin with questions / feedback / bug reports */}
       <ContactAdminSection />
 
@@ -1450,6 +1454,15 @@ function ActionPlanView({
   );
   const [exportOpen, setExportOpen] = useState(false);
 
+  // Is there anything anywhere to export? (any manual item, goal, or active
+  // challenge across all windows). Drives whether the Export button shows.
+  const planHasContent =
+    goals.length > 0 ||
+    weeklyChallenges.some((c) => c.status === "active") ||
+    PLAN_WINDOWS.some((w) =>
+      SECTIONS_BY_WINDOW[w.id].some((s) => (store[w.id]?.[s]?.length ?? 0) > 0),
+    );
+
   useEffect(() => {
     setStoreState(parsePlanStore(localStorage.getItem("cultvr-action-plan-v3")));
     setReady(true);
@@ -1614,18 +1627,20 @@ function ActionPlanView({
             </div>
           </div>
 
-          {/* Export */}
+          {/* Export — only offered once there's something to export. */}
           <div className="relative shrink-0">
-            <button
-              aria-label="Export to PDF"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-3 text-xs font-medium text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)]"
-              onClick={() => setExportOpen((v) => !v)}
-              title="Export to PDF"
-              type="button"
-            >
-              <Download size={14} />
-              Export
-            </button>
+            {planHasContent ? (
+              <button
+                aria-label="Export to PDF"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-3 text-xs font-medium text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)]"
+                onClick={() => setExportOpen((v) => !v)}
+                title="Export to PDF"
+                type="button"
+              >
+                <Download size={14} />
+                Export
+              </button>
+            ) : null}
 
             {exportOpen ? (
               <div
@@ -1708,7 +1723,7 @@ function ActionPlanView({
 
         {ready ? (
           <div className="mt-6 grid gap-5">
-            {SECTIONS_BY_WINDOW[activeWindow].map((sectionId) => {
+            {SECTIONS_BY_WINDOW[activeWindow].map((sectionId, index) => {
               const sec = SECTION_DEFS[sectionId];
               const isAuto = sectionId === autoPopSection(activeWindow);
               return (
@@ -1721,6 +1736,7 @@ function ActionPlanView({
                   onDelete={(id) => removeItem(sec.id, id)}
                   onEdit={(id, update) => editItem(sec.id, id, update)}
                   onToggle={(id) => toggleItem(sec.id, id)}
+                  primary={index === 0}
                   section={sec}
                 />
               );
@@ -1917,6 +1933,15 @@ function PrintableActionPlan({
 
 // ── PlanColumn ──────────────────────────────────────────────────────────────
 
+/** A short, section-appropriate example shown as a faint "ghost" in the empty
+ *  state so first-time users learn what to type. */
+const PLAN_PLACEHOLDER: Record<string, string> = {
+  priority: "e.g. Draft my Common App personal statement",
+  secondary: "e.g. Email two teachers about recommendations",
+  reaches: "e.g. Get research experience in a lab",
+  targets: "e.g. Finalize my college list",
+};
+
 function PlanColumn({
   challenges,
   goals,
@@ -1925,6 +1950,7 @@ function PlanColumn({
   onDelete,
   onEdit,
   onToggle,
+  primary = false,
   section,
 }: {
   challenges: WeeklyChallenge[];
@@ -1934,6 +1960,7 @@ function PlanColumn({
   onDelete: (id: string) => void;
   onEdit: (id: string, update: Partial<ManualItem>) => void;
   onToggle: (id: string) => void;
+  primary?: boolean;
   section: SectionDef;
 }) {
   const [draft, setDraft] = useState("");
@@ -1945,18 +1972,42 @@ function PlanColumn({
   }
 
   const isEmpty = goals.length === 0 && challenges.length === 0 && items.length === 0;
+  const example = PLAN_PLACEHOLDER[section.id] ?? "e.g. Add your first step";
 
   return (
-    <div className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5">
+    <div
+      className={[
+        "rounded-2xl border p-5",
+        // Primary section reads heavier: tinted background + a thicker accent
+        // left rule so the ranking is obvious at a glance.
+        primary
+          ? "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] border-l-[3px]"
+          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)]",
+      ].join(" ")}
+      style={primary ? { borderLeftColor: section.color } : undefined}
+    >
       {/* Section header */}
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <span
-          className="size-2.5 shrink-0 rounded-full"
+          className={["shrink-0 rounded-full", primary ? "size-3" : "size-2.5"].join(" ")}
           style={{ backgroundColor: section.color }}
         />
-        <h3 className="font-serif text-xl leading-tight text-[color:var(--almanac-ink)]">
+        <h3
+          className={[
+            "font-serif leading-tight text-[color:var(--almanac-ink)]",
+            primary ? "text-2xl" : "text-lg",
+          ].join(" ")}
+        >
           {section.label}
         </h3>
+        {primary ? (
+          <span
+            className="ml-1 rounded-full px-1.5 py-0.5 text-[0.55rem] font-semibold uppercase tracking-[0.12em]"
+            style={{ backgroundColor: `${section.color}1A`, color: section.color }}
+          >
+            Focus first
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-2">
@@ -2043,28 +2094,38 @@ function PlanColumn({
         ))}
 
         {isEmpty ? (
-          <p className="py-1 text-[0.8rem] italic text-[color:var(--almanac-ink-soft)]">
-            Nothing here yet.
-          </p>
+          // Inviting empty state: a faint "ghost" task that models a good entry.
+          <button
+            className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-[color:var(--almanac-rule)] px-3 py-2.5 text-left transition hover:border-[color:var(--almanac-olive)] hover:bg-[color:var(--almanac-paper-deep)]/40"
+            onClick={() => setDraft(example.replace(/^e\.g\.\s*/, ""))}
+            type="button"
+          >
+            <span className="mt-0.5 size-3.5 shrink-0 rounded-full border-2 border-[color:var(--almanac-ink-faint,rgba(31,36,51,0.2))]" />
+            <span className="text-[0.83rem] leading-snug text-[color:var(--almanac-ink-soft)]">
+              {example}
+              <span className="ml-1 text-[0.7rem] italic opacity-70">— tap to start</span>
+            </span>
+          </button>
         ) : null}
       </div>
 
       {/* Add input */}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <input
-          className="h-9 flex-1 rounded-lg border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 text-[0.83rem] text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[color:var(--almanac-olive)]"
+          className="h-10 flex-1 rounded-lg border border-[color:var(--almanac-rule)] bg-white/70 px-3 text-[0.83rem] text-[color:var(--almanac-ink)] shadow-inner outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[color:var(--almanac-olive)] focus:bg-white"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-          placeholder="Add item…"
+          placeholder={`Add to ${section.label.toLowerCase()}…`}
           type="text"
           value={draft}
         />
         <button
-          className="h-9 shrink-0 rounded-lg bg-[color:var(--almanac-ink)] px-3 text-[0.75rem] font-medium text-[color:var(--almanac-paper)] transition disabled:opacity-40"
+          className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg bg-[color:var(--almanac-ink)] px-4 text-[0.8rem] font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
           disabled={!draft.trim()}
           onClick={commit}
           type="button"
         >
+          <Plus size={14} />
           Add
         </button>
       </div>

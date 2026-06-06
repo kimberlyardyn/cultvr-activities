@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ChevronDown,
   Copy,
+  Download,
   FileText,
   Mic,
   Pencil,
@@ -14,13 +15,14 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import {
   commitImportedActivities,
   createActivity,
   createNoteForActivity,
   deleteActivity,
+  getResumeProfile,
   parseActivitiesFromText,
   reorderActivities,
   tagNoteToActivity,
@@ -34,11 +36,12 @@ import {
 } from "@/components/activity-voice-coach";
 import { LinkedGoals } from "@/components/linked-goals";
 import { toast } from "@/components/toast";
+import { exportAsDocx, exportAsPdf } from "@/lib/export-doc";
 import {
   PendingGoalsEditor,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
-import type { Activity, Award, Goal, Note } from "@/lib/types";
+import type { Activity, Award, Goal, Note, ResumeProfile } from "@/lib/types";
 
 const CATEGORIES = [
   "Academic",
@@ -189,6 +192,31 @@ function toDraft(activity: Activity): ActivityDraft {
   };
 }
 
+/** Build a (partial) Activity from the editor draft so the export formatters,
+ *  which read Activity, can run on unsaved edits. */
+function draftToActivity(d: ActivityDraft): Activity {
+  return {
+    id: d.id ?? "draft",
+    name: d.name,
+    role: d.position || null,
+    impact: d.description || null,
+    years: null,
+    category: d.category || null,
+    position: d.position || null,
+    description: d.description || null,
+    organization_description: d.organization_description || null,
+    grades: d.grades,
+    start_date: d.start_date || null,
+    end_date: d.end_date || null,
+    in_progress: d.in_progress,
+    hours_per_week: d.hours_per_week,
+    weeks_per_year: d.weeks_per_year,
+    tags: d.tags,
+    sort_order: 0,
+    created_at: new Date().toISOString(),
+  };
+}
+
 function emptyDraft(): ActivityDraft {
   return {
     id: null,
@@ -219,8 +247,8 @@ export function ActivitiesTab({
   goals: Goal[];
 }) {
   const [editing, setEditing] = useState<{ draft: ActivityDraft; voiceFirst: boolean } | null>(null);
-  const [exporting, setExporting] = useState<Activity | null>(null);
   const [importing, setImporting] = useState(false);
+  const [bulkExporting, setBulkExporting] = useState(false);
   const [, startTransition] = useTransition();
 
   const handleDelete = useCallback((id: string) => {
@@ -293,6 +321,16 @@ export function ActivitiesTab({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {activities.length > 0 && (
+            <button
+              className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
+              onClick={() => setBulkExporting(true)}
+              type="button"
+            >
+              <FileText size={14} />
+              Export
+            </button>
+          )}
           <button
             className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
             onClick={() => setImporting(true)}
@@ -337,7 +375,6 @@ export function ActivitiesTab({
                 goals={SAMPLE_ACTIVITY_GOALS[i] ?? []}
                 onEdit={() => setEditing({ draft: { ...toDraft(a), id: null }, voiceFirst: false })}
                 onDelete={() => {}}
-                onExport={() => setExporting(a)}
                 allNotes={[]}
                 isSample
               />
@@ -355,7 +392,6 @@ export function ActivitiesTab({
               goals={goals.filter((g) => g.activity_id === a.id)}
               onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
               onDelete={() => handleDelete(a.id)}
-              onExport={() => setExporting(a)}
               allNotes={notes}
               onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
               onMoveDown={idx < activities.length - 1 ? () => handleReorder(idx, 1) : undefined}
@@ -378,8 +414,12 @@ export function ActivitiesTab({
         />
       )}
 
-      {exporting && (
-        <ExportModal activity={exporting} onClose={() => setExporting(null)} />
+      {bulkExporting && (
+        <BulkExportModal
+          activities={activities}
+          awards={awards ?? []}
+          onClose={() => setBulkExporting(false)}
+        />
       )}
 
       {importing && (
@@ -399,7 +439,6 @@ function ActivityCard({
   goals,
   onEdit,
   onDelete,
-  onExport,
   allNotes,
   isSample = false,
   onMoveUp,
@@ -411,7 +450,6 @@ function ActivityCard({
   goals: Goal[];
   onEdit: () => void;
   onDelete: () => void;
-  onExport: () => void;
   allNotes: Note[];
   isSample?: boolean;
   onMoveUp?: () => void;
@@ -458,14 +496,6 @@ function ActivityCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            className="rounded-full border border-[color:var(--almanac-rule)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
-            onClick={onExport}
-            type="button"
-          >
-            <FileText className="mr-1 inline" size={12} />
-            Export
-          </button>
           <button
             className="rounded-full p-2 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
             onClick={onEdit}
@@ -861,6 +891,7 @@ function ActivityEditor({
   const [newTag, setNewTag] = useState("");
   const [pendingGoals, setPendingGoals] = useState<PendingGoal[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [exportOpen, setExportOpen] = useState(false);
   const isNew = !draft.id;
   const charCount = draft.description.length;
 
@@ -1129,7 +1160,38 @@ function ActivityEditor({
               goals={existingGoals}
             />
           )}
+
+          {/* Export this single activity — lives at the very bottom of the editor. */}
+          {draft.name.trim() ? (
+            <div className="border-t border-[color:var(--almanac-rule)] pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-[color:var(--almanac-ink)]">
+                    Export this activity
+                  </p>
+                  <p className="mt-0.5 text-[0.7rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+                    Copy it as a Common App, UC, or resume entry.
+                  </p>
+                </div>
+                <button
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+                  onClick={() => setExportOpen(true)}
+                  type="button"
+                >
+                  <FileText size={13} />
+                  Export
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
+
+        {exportOpen ? (
+          <ExportModal
+            activity={draftToActivity(draft)}
+            onClose={() => setExportOpen(false)}
+          />
+        ) : null}
 
         <footer className="flex items-center justify-end gap-2 border-t border-[color:var(--almanac-rule)] px-6 py-4">
           <button
@@ -1934,19 +1996,14 @@ function ReviewAwardCard({
 
 function ExportModal({ activity, onClose }: { activity: Activity; onClose: () => void }) {
   const [tab, setTab] = useState<"commonapp" | "uc" | "resume">("commonapp");
-  const [copied, setCopied] = useState(false);
 
-  const content = useMemo(() => {
+  const generated = useMemo(() => {
     if (tab === "commonapp") return formatCommonApp(activity);
     if (tab === "uc") return formatUC(activity);
     return formatResume(activity);
   }, [tab, activity]);
 
-  const copy = useCallback(async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }, [content]);
+  const formatLabel = tab === "commonapp" ? "Common App" : tab === "uc" ? "UC" : "Resume";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
@@ -1992,23 +2049,310 @@ function ExportModal({ activity, onClose }: { activity: Activity; onClose: () =>
           </div>
         </div>
 
-        <div className="px-6 py-5">
-          <div className="relative">
-            <pre className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 p-4 font-mono text-xs leading-6 text-[color:var(--almanac-ink)]">
-              {content}
-            </pre>
-            <button
-              className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-[color:var(--almanac-ink)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] shadow transition hover:opacity-90"
-              onClick={copy}
-              type="button"
-            >
-              <Copy size={12} />
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
+        <ExportPreview
+          // Reset the editable text whenever the format changes.
+          key={tab}
+          charLimit={tab === "commonapp" ? 150 : tab === "uc" ? 350 : undefined}
+          docTitle={`${activity.name} — ${formatLabel}`}
+          fileBase={`${activity.name}-${formatLabel}`}
+          initialText={generated}
+          notes={<ExportNotes tab={tab} activity={activity} />}
+        />
+      </div>
+    </div>
+  );
+}
 
-          <ExportNotes tab={tab} activity={activity} />
-        </div>
+function BulkExportModal({
+  activities,
+  awards,
+  onClose,
+}: {
+  activities: Activity[];
+  awards: Award[];
+  onClose: () => void;
+}) {
+  const [format, setFormat] = useState<"resume" | "commonapp" | "uc" | null>(null);
+  const [resumeProfile, setResumeProfile] = useState<ResumeProfile | null>(null);
+
+  // Load the saved résumé header once (used for the Resume format).
+  useEffect(() => {
+    void getResumeProfile().then((p) => setResumeProfile(p));
+  }, []);
+
+  const content = useMemo(() => {
+    if (!format) return "";
+    const fmt =
+      format === "commonapp"
+        ? formatCommonApp
+        : format === "uc"
+          ? formatUC
+          : formatResume;
+
+    const blocks: string[] = [];
+
+    // Resume header (resume format only).
+    if (format === "resume") {
+      const header = formatResumeHeader(resumeProfile);
+      if (header) blocks.push(header);
+    }
+
+    // Activities.
+    if (activities.length) {
+      const heading = format === "resume" ? "ACTIVITIES & EXPERIENCE\n" : "";
+      blocks.push(heading + activities.map((a) => fmt(a)).join("\n\n──────────\n\n"));
+    }
+
+    // Awards — always appended.
+    const awardsBlock = formatAwardsBlock(awards, format);
+    if (awardsBlock) blocks.push(awardsBlock);
+
+    return blocks.join("\n\n\n");
+  }, [format, activities, awards, resumeProfile]);
+
+  const formatLabel =
+    format === "commonapp"
+      ? "Common App Activity List"
+      : format === "uc"
+        ? "UC Activity List"
+        : "Resume";
+
+  const FORMATS = [
+    {
+      id: "resume" as const,
+      label: "Resume",
+      description:
+        "Your header, activities with bulleted accomplishments, and an awards section — ready to drop into a resume.",
+    },
+    {
+      id: "commonapp" as const,
+      label: "Common App Activity List",
+      description: "Activities in Common App format (150-char descriptions), plus an honors list.",
+    },
+    {
+      id: "uc" as const,
+      label: "University of California Activity List",
+      description: "Activities in UC format (350-char descriptions), plus awards & honors.",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
+      <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-6 py-4">
+          <div>
+            <h3 className="font-serif text-2xl text-[color:var(--almanac-ink)]">
+              Export
+            </h3>
+            <p className="text-xs text-[color:var(--almanac-ink-soft)]">
+              {activities.length} {activities.length === 1 ? "activity" : "activities"}
+              {awards.length
+                ? ` · ${awards.length} ${awards.length === 1 ? "award" : "awards"}`
+                : ""}{" "}
+              · choose a format
+            </p>
+          </div>
+          <button
+            className="rounded-full p-1.5 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        {format === null ? (
+          // Step 1: pick a format.
+          <div className="grid gap-3 px-6 py-5">
+            {FORMATS.map((f) => (
+              <button
+                className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-3 text-left transition hover:border-[color:var(--almanac-olive)] hover:bg-white"
+                key={f.id}
+                onClick={() => setFormat(f.id)}
+                type="button"
+              >
+                <div>
+                  <p className="text-sm font-medium text-[color:var(--almanac-ink)]">{f.label}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
+                    {f.description}
+                  </p>
+                </div>
+                <FileText className="shrink-0 text-[color:var(--almanac-ink-soft)]" size={16} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          // Step 2: editable preview for the chosen format → export.
+          <div>
+            <div className="px-6 pt-4">
+              <button
+                className="text-xs font-medium text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
+                onClick={() => setFormat(null)}
+                type="button"
+              >
+                ← Choose a different format
+              </button>
+            </div>
+            <ExportPreview
+              key={format}
+              docTitle={formatLabel}
+              fileBase={formatLabel}
+              initialText={content}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Editable export preview: shows the generated text in a textarea the user can
+ * tweak, then exports the (possibly edited) text as a copy, PDF, or Word file.
+ * Edits here never touch the saved activity — export-only.
+ */
+function ExportPreview({
+  charLimit,
+  docTitle,
+  fileBase,
+  initialText,
+  notes,
+}: {
+  charLimit?: number;
+  docTitle: string;
+  fileBase: string;
+  initialText: string;
+  notes?: React.ReactNode;
+}) {
+  const [text, setText] = useState(initialText);
+  const [copied, setCopied] = useState(false);
+  const [condensing, setCondensing] = useState(false);
+
+  const copy = useCallback(async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [text]);
+
+  function downloadPdf() {
+    exportAsPdf(docTitle, [{ heading: "", body: text }], fileBase);
+    toast.success("Downloaded as PDF.");
+  }
+
+  async function downloadDocx() {
+    await exportAsDocx(docTitle, [{ heading: "", body: text }], fileBase);
+    toast.success("Downloaded as Word document.");
+  }
+
+  // Pull the description block out of the formatted text (the line after
+  // "Description (… max):"), so we can rewrite just that part.
+  function extractDescription(): { desc: string; line: number; lines: string[] } | null {
+    const lines = text.split("\n");
+    const idx = lines.findIndex((l) => /^Description \(/i.test(l));
+    if (idx === -1 || idx + 1 >= lines.length) return null;
+    return { desc: lines[idx + 1], line: idx + 1, lines };
+  }
+
+  async function aiCondense() {
+    if (!charLimit) return;
+    const found = extractDescription();
+    const target = found ? found.desc : text;
+    if (target.trim().length <= charLimit) {
+      toast.info("Already within the limit.");
+      return;
+    }
+    setCondensing(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content:
+                `Rewrite this activity description so it is no more than ${charLimit} characters ` +
+                `(aim for ${Math.floor(charLimit * 0.85)}–${charLimit}). Keep the strongest, most ` +
+                `specific accomplishments and any numbers. Use concise, active phrasing. Return ONLY ` +
+                `the rewritten description, no quotes or labels:\n\n${target}`,
+            },
+          ],
+        }),
+      });
+      const data = (await res.json()) as { message?: string };
+      let rewrite = (data.message ?? "").trim().replace(/^["']|["']$/g, "");
+      if (!rewrite) {
+        toast.error("Couldn't condense right now — try again.");
+        return;
+      }
+      // Hard-guarantee the limit even if the model overshoots.
+      if (rewrite.length > charLimit) rewrite = condenseToFit(rewrite, charLimit);
+
+      if (found) {
+        const next = [...found.lines];
+        next[found.line] = rewrite;
+        setText(next.join("\n"));
+      } else {
+        setText(rewrite);
+      }
+      toast.success(`Condensed to ${rewrite.length} characters.`);
+    } catch {
+      toast.error("Couldn't condense right now — try again.");
+    } finally {
+      setCondensing(false);
+    }
+  }
+
+  return (
+    <div className="px-6 py-5">
+      <p className="mb-2 text-[0.7rem] text-[color:var(--almanac-ink-soft)]">
+        Preview — edit the text below before exporting. Changes here don&apos;t affect
+        your saved activity.
+      </p>
+      <textarea
+        className="max-h-[24rem] min-h-[16rem] w-full resize-y overflow-y-auto rounded-xl border border-[color:var(--almanac-rule)] bg-white/70 p-4 font-mono text-xs leading-6 text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)] focus:bg-white"
+        onChange={(e) => setText(e.target.value)}
+        value={text}
+      />
+
+      {notes}
+
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {charLimit ? (
+          <button
+            className="mr-auto inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-olive)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-olive)] transition hover:bg-[color:var(--almanac-olive)]/10 disabled:opacity-50"
+            disabled={condensing}
+            onClick={aiCondense}
+            type="button"
+          >
+            <Sparkles size={13} />
+            {condensing ? "Condensing…" : "Condense to fit"}
+          </button>
+        ) : null}
+        <button
+          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+          onClick={copy}
+          type="button"
+        >
+          <Copy size={13} />
+          {copied ? "Copied!" : "Copy text"}
+        </button>
+        <button
+          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+          onClick={downloadDocx}
+          type="button"
+        >
+          <FileText size={13} />
+          Word
+        </button>
+        <button
+          className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--almanac-ink)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+          onClick={downloadPdf}
+          type="button"
+        >
+          <Download size={13} />
+          PDF
+        </button>
       </div>
     </div>
   );
@@ -2048,14 +2392,63 @@ function ExportNotes({
   );
 }
 
+/**
+ * Condense `text` to fit within `limit` characters WITHOUT a trailing "…".
+ * Trims at sentence then word boundaries, and abbreviates common filler so the
+ * result lands as close to the limit as possible (target: at least 75% of the
+ * limit — i.e. within 25% — whenever the source is long enough). Falls back to a
+ * hard character cut only if a single word somehow exceeds the limit.
+ */
+function condenseToFit(text: string, limit: number): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= limit) return clean;
+
+  // Light abbreviations to reclaim characters before trimming words.
+  let s = clean
+    .replace(/\band\b/g, "&")
+    .replace(/\bwith\b/g, "w/")
+    .replace(/\bapproximately\b/gi, "~")
+    .replace(/\bpercent\b/gi, "%")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (s.length <= limit) return s;
+
+  const target = Math.floor(limit * 0.75); // stay within 25% of the limit
+
+  // Prefer ending on a complete sentence at/under the limit.
+  const sentences = s.match(/[^.!?]+[.!?]+/g) ?? [];
+  let built = "";
+  for (const sentence of sentences) {
+    if ((built + sentence).trim().length <= limit) built += sentence;
+    else break;
+  }
+  if (built.trim().length >= target) return built.trim();
+
+  // Otherwise fill word-by-word up to the limit.
+  const words = s.split(" ");
+  let out = "";
+  for (const w of words) {
+    const next = out ? `${out} ${w}` : w;
+    if (next.length <= limit) out = next;
+    else break;
+  }
+  if (out.length > 0) return out.replace(/[,;:]$/, "");
+
+  // Single oversized token — hard cut as a last resort.
+  return s.slice(0, limit);
+}
+
 function formatCommonApp(a: Activity): string {
   const desc = (a.description ?? a.impact ?? "").trim();
-  const trimmedDesc = desc.length > 150 ? desc.slice(0, 147) + "..." : desc;
+  // Common App field limits: position 50, org name 100, description 150.
+  const position = condenseToFit(a.position || a.role || "—", 50);
+  const org = condenseToFit(a.name, 100);
+  const trimmedDesc = condenseToFit(desc, 150);
   const grades = a.grades.length ? a.grades.join(", ") : "—";
   return [
     `Activity Type: ${a.category || "—"}`,
-    `Position/Leadership: ${a.position || a.role || "—"}`,
-    `Organization Name: ${a.name}`,
+    `Position/Leadership (50 char): ${position}`,
+    `Organization Name (100 char): ${org}`,
     ``,
     `Description (150 char max):`,
     trimmedDesc || "—",
@@ -2070,7 +2463,7 @@ function formatCommonApp(a: Activity): string {
 
 function formatUC(a: Activity): string {
   const desc = (a.description ?? a.impact ?? "").trim();
-  const trimmedDesc = desc.length > 350 ? desc.slice(0, 347) + "..." : desc;
+  const trimmedDesc = condenseToFit(desc, 350);
   const grades = a.grades.length ? a.grades.join(", ") : "—";
   return [
     `Category: ${a.category || "—"}`,
@@ -2101,4 +2494,59 @@ function formatResume(a: Activity): string {
     `${a.position || a.role || ""}${a.category ? `, ${a.category}` : ""}`,
     bullets || `  • ${desc || ""}`,
   ].join("\n");
+}
+
+// ── Award formatters ─────────────────────────────────────────────────────────
+
+function awardLine(a: Award): string {
+  const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(", ");
+  return meta ? `${a.name} — ${meta}` : a.name;
+}
+
+function formatAwardResume(a: Award): string {
+  const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(" · ");
+  const head = `${a.name}${a.year ? `    ${a.year}` : ""}`;
+  return [head, meta && !a.year ? meta : meta.replace(` · ${a.year}`, "")]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Builds the awards block for a given format. Returns "" if no awards. */
+function formatAwardsBlock(
+  awards: Award[],
+  format: "resume" | "commonapp" | "uc",
+): string {
+  if (!awards.length) return "";
+  if (format === "resume") {
+    return ["AWARDS & HONORS", ...awards.map((a) => `  • ${awardLine(a)}`)].join("\n");
+  }
+  // Common App & UC list honors as their own simple entries.
+  const heading =
+    format === "commonapp" ? "HONORS / AWARDS" : "AWARDS & HONORS (UC)";
+  return [
+    heading,
+    ...awards.map((a, i) => {
+      const desc = a.description ? ` — ${a.description}` : "";
+      return `${i + 1}. ${awardLine(a)}${desc}`;
+    }),
+  ].join("\n");
+}
+
+/** Resume header from the saved resume profile. Returns "" if nothing set. */
+function formatResumeHeader(p: ResumeProfile | null): string {
+  if (!p) return "";
+  const name = (p.full_name ?? "").trim();
+  const contactParts = [p.email, p.phone, p.location, p.links]
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean);
+  const lines: string[] = [];
+  if (name) lines.push(name.toUpperCase());
+  if (contactParts.length) lines.push(contactParts.join("  ·  "));
+  if (p.summary?.trim()) {
+    lines.push("");
+    lines.push(p.summary.trim());
+  }
+  if (!lines.length) return "";
+  lines.push("══════════════════════════════════════");
+  return lines.join("\n");
 }

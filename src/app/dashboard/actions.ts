@@ -1220,6 +1220,52 @@ export async function updateStudentAdmissionsProfile(
   return { ok: true as const };
 }
 
+// ── Resume profile (header / contact details) ────────────────────────────────
+
+const resumeProfileSchema = z.object({
+  fullName: z.string().max(120).optional(),
+  email: z.string().max(160).optional(),
+  phone: z.string().max(60).optional(),
+  location: z.string().max(160).optional(),
+  links: z.string().max(400).optional(),
+  summary: z.string().max(600).optional(),
+});
+
+export async function getResumeProfile() {
+  const { supabase, user } = await requireUser();
+  const { data } = await supabase
+    .from("resume_profiles")
+    .select("full_name, email, phone, location, links, summary")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function updateResumeProfile(
+  input: z.input<typeof resumeProfileSchema>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, user } = await requireUser();
+  const parsed = resumeProfileSchema.parse(input);
+
+  const { error } = await supabase.from("resume_profiles").upsert(
+    {
+      user_id: user.id,
+      full_name: parsed.fullName?.trim() || null,
+      email: parsed.email?.trim() || null,
+      phone: parsed.phone?.trim() || null,
+      location: parsed.location?.trim() || null,
+      links: parsed.links?.trim() || null,
+      summary: parsed.summary?.trim() || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
 export async function uploadDocument(formData: FormData) {
   const { supabase, user } = await requireUser();
   const file = formData.get("file");

@@ -167,6 +167,18 @@ create table if not exists public.admin_ai_instructions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.resume_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade default auth.uid(),
+  full_name text,
+  email text,
+  phone text,
+  location text,
+  links text,
+  summary text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.feedback_messages (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
@@ -302,6 +314,7 @@ alter table public.awards enable row level security;
 alter table public.college_list enable row level security;
 alter table public.documents enable row level security;
 alter table public.admin_ai_instructions enable row level security;
+alter table public.resume_profiles enable row level security;
 alter table public.feedback_messages enable row level security;
 alter table public.guided_sessions enable row level security;
 alter table public.guided_session_answers enable row level security;
@@ -332,6 +345,12 @@ with check (auth.uid() = user_id);
 drop policy if exists "student_memories_all_own" on public.student_memories;
 create policy "student_memories_all_own"
 on public.student_memories for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "resume_profiles_all_own" on public.resume_profiles;
+create policy "resume_profiles_all_own"
+on public.resume_profiles for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 

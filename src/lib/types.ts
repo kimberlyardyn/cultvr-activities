@@ -114,6 +114,15 @@ export type StudentAdmissionsProfile = {
   updated_at: string;
 };
 
+export type ResumeProfile = {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  links: string | null;
+  summary: string | null;
+};
+
 export type StudentMemory = {
   id: string;
   user_id: string;
