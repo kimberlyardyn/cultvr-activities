@@ -36,7 +36,7 @@ const COACH_INSTRUCTIONS = [
   "6) REQUIREMENTS — ASK: 'What was needed to earn this? Test score, application, judging rounds?' (Fill requirements field if shared.)",
   "7) DESCRIPTION — gather rich narrative context.",
   "8) TAGS — suggest a few (STEM, Humanities, Academic, Service, Creativity, Leadership, Passion Project) and confirm.",
-  "9) GOALS — ASK: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' For EACH goal they share, call `update_fields` with the `goals` array — a short title plus an optional target_date in YYYY-MM format. Send the FULL list of goals each time. These save automatically with the award, so confirm them out loud instead of telling them to add it manually later.",
+  "9) GOALS — ASK: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' For EACH goal they share, call `update_fields` with the `goals` array — a short title plus an optional target_date in YYYY-MM format. If the timeframe is vague (e.g. 'spring', 'next year'), pin it down by proposing a specific month and asking them to confirm — e.g. 'Let's make that more specific — can I put April instead of spring?' — and use the month they agree to. Send the FULL list of goals each time. These save automatically with the award, so confirm them out loud instead of telling them to add it manually later.",
   "",
   "CRITICAL — DESCRIPTION VOICE & STYLE:",
   "The description ends up on the student's RESUME and college applications. Write it in CONCISE FIRST-PERSON RESUME PROSE.",
