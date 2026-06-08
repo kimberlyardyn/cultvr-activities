@@ -16,6 +16,7 @@ export type VoiceFieldUpdate = {
   hours_per_week?: number;
   weeks_per_year?: number;
   tags?: string[];
+  goals?: Array<{ title: string; target_date?: string }>;
 };
 
 type Status = "idle" | "connecting" | "live" | "error";
@@ -44,7 +45,7 @@ const COACH_INSTRUCTIONS = [
   "8) END DATE — ASK 'Are you still doing this, or has it ended? If ended, when?' Set in_progress accordingly.",
   "9) TIME COMMITMENT — ASK 'About how many hours per week, and how many weeks per year?'",
   "10) TAGS — based on what you heard, suggest a few tags (Leadership, STEM, Humanities, Service, etc.) and let them confirm.",
-  "11) GOALS — at the end ASK: 'Do you have any goals or targets for this activity going forward? Short-term or long-term? When do you hope to reach them?' If they share goals, mention they can add them in the Goals & Targets section of the form after you save.",
+  "11) GOALS — at the end ASK: 'Do you have any goals or targets for this activity going forward? Short-term or long-term? When do you hope to reach them?' For EACH goal they share, call `update_fields` with the `goals` array — give each a short title and, when they mention a timeframe, a target_date in YYYY-MM format. Send the FULL list of goals each time. These are saved automatically with the activity, so confirm them out loud (e.g. 'Got it — I'll add that goal') instead of telling them to enter it manually later.",
   "",
   "CRITICAL — DESCRIPTION VOICE & STYLE:",
   "The description field is what will end up on their RESUME and college applications. Write it in CONCISE FIRST-PERSON RESUME PROSE.",
@@ -61,7 +62,7 @@ const COACH_INSTRUCTIONS = [
   "",
   "Category MUST be one of: Academic, Art, Athletic - Club, Athletic - JV/Varsity, Career-Oriented, Community Service (Volunteer), Computer/Technology, Cultural, Dance, Debate/Speech, Environmental, Family Responsibilities, Foreign Exchange, Internship, Journalism/Publication, LGBT, Music: Instrumental, Music: Vocal, Religious, Research, Robotics, School Spirit, Science/Math, Social Justice, Speech & Debate, Student Govt./Politics, Theater/Drama, Work (Paid), Other Club/Activity.",
   "",
-  "Start by warmly asking what activity they want to add. When you've covered the sections and they sound done, give a brief verbal summary and remind them they can add goals or refine anything in the form before saving.",
+  "Start by warmly asking what activity they want to add. When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
@@ -95,6 +96,26 @@ const UPDATE_FIELDS_TOOL = {
       hours_per_week: { type: "number" },
       weeks_per_year: { type: "number" },
       tags: { type: "array", items: { type: "string" } },
+      goals: {
+        type: "array",
+        description:
+          "Goals or targets the student wants to reach for this activity going forward. Pass the full list every time. Each item has a short title plus an optional target_date.",
+        items: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "Short goal statement, e.g. 'Be elected club president'.",
+            },
+            target_date: {
+              type: "string",
+              description: "Optional target month in YYYY-MM format.",
+            },
+          },
+          required: ["title"],
+          additionalProperties: false,
+        },
+      },
     },
     additionalProperties: false,
   },
@@ -412,5 +433,17 @@ function applyUpdate(args: VoiceFieldUpdate, onUpdate: (u: VoiceFieldUpdate) => 
   if (typeof args.hours_per_week === "number") clean.hours_per_week = args.hours_per_week;
   if (typeof args.weeks_per_year === "number") clean.weeks_per_year = args.weeks_per_year;
   if (Array.isArray(args.tags)) clean.tags = args.tags.filter((t): t is string => typeof t === "string");
+  if (Array.isArray(args.goals)) {
+    const goals = args.goals
+      .filter(
+        (g): g is { title: string; target_date?: string } =>
+          !!g && typeof g === "object" && typeof g.title === "string" && g.title.trim().length > 0,
+      )
+      .map((g) => ({
+        title: g.title.trim(),
+        target_date: typeof g.target_date === "string" ? g.target_date.trim() : undefined,
+      }));
+    if (goals.length) clean.goals = goals;
+  }
   onUpdate(clean);
 }

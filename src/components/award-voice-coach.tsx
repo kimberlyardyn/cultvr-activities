@@ -12,6 +12,7 @@ export type AwardVoiceUpdate = {
   description?: string;
   requirements?: string;
   tags?: string[];
+  goals?: Array<{ title: string; target_date?: string }>;
 };
 
 type Status = "idle" | "connecting" | "live" | "error";
@@ -35,7 +36,7 @@ const COACH_INSTRUCTIONS = [
   "6) REQUIREMENTS — ASK: 'What was needed to earn this? Test score, application, judging rounds?' (Fill requirements field if shared.)",
   "7) DESCRIPTION — gather rich narrative context.",
   "8) TAGS — suggest a few (STEM, Humanities, Academic, Service, Creativity, Leadership, Passion Project) and confirm.",
-  "9) GOALS — ASK: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' If yes, mention they can add it in the Goals & Targets section after saving.",
+  "9) GOALS — ASK: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' For EACH goal they share, call `update_fields` with the `goals` array — a short title plus an optional target_date in YYYY-MM format. Send the FULL list of goals each time. These save automatically with the award, so confirm them out loud instead of telling them to add it manually later.",
   "",
   "CRITICAL — DESCRIPTION VOICE & STYLE:",
   "The description ends up on the student's RESUME and college applications. Write it in CONCISE FIRST-PERSON RESUME PROSE.",
@@ -49,7 +50,7 @@ const COACH_INSTRUCTIONS = [
   "",
   "As you learn details, call the `update_fields` tool to fill the form. Call it AS OFTEN AS YOU LEARN something new — overwrite description with the improved polished version as the conversation progresses.",
   "",
-  "Start by warmly asking what award they want to add. When done, give a brief verbal summary and remind them they can refine fields or add goals before saving.",
+  "Start by warmly asking what award they want to add. When done, give a brief verbal summary and let them know everything — including any goals — has been added to the form to review or refine before saving.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
@@ -79,6 +80,26 @@ const UPDATE_FIELDS_TOOL = {
           "Optional. Criteria / how the award is earned (e.g. 'qualified via regional placement, then 6 elimination rounds at state').",
       },
       tags: { type: "array", items: { type: "string" } },
+      goals: {
+        type: "array",
+        description:
+          "Goals or targets tied to this award going forward. Pass the full list every time. Each item has a short title plus an optional target_date.",
+        items: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "Short goal statement, e.g. 'Advance from Commended to Finalist'.",
+            },
+            target_date: {
+              type: "string",
+              description: "Optional target month in YYYY-MM format.",
+            },
+          },
+          required: ["title"],
+          additionalProperties: false,
+        },
+      },
     },
     additionalProperties: false,
   },
@@ -371,5 +392,17 @@ function applyUpdate(args: AwardVoiceUpdate, onUpdate: (u: AwardVoiceUpdate) => 
   if (typeof args.description === "string" && args.description.trim()) clean.description = args.description.trim();
   if (typeof args.requirements === "string" && args.requirements.trim()) clean.requirements = args.requirements.trim();
   if (Array.isArray(args.tags)) clean.tags = args.tags.filter((t): t is string => typeof t === "string");
+  if (Array.isArray(args.goals)) {
+    const goals = args.goals
+      .filter(
+        (g): g is { title: string; target_date?: string } =>
+          !!g && typeof g === "object" && typeof g.title === "string" && g.title.trim().length > 0,
+      )
+      .map((g) => ({
+        title: g.title.trim(),
+        target_date: typeof g.target_date === "string" ? g.target_date.trim() : undefined,
+      }));
+    if (goals.length) clean.goals = goals;
+  }
   onUpdate(clean);
 }

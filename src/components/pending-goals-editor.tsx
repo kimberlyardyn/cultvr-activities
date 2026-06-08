@@ -11,6 +11,50 @@ export type PendingGoal = {
   target_date: string;
 };
 
+/** A goal as captured by the voice coach (title + optional loose month). */
+export type VoiceGoalInput = { title?: string; target_date?: string };
+
+/**
+ * Normalize a voice-provided target date to the `YYYY-MM-01` form the goals
+ * table and the server's `pending_goals` validation expect. Accepts either
+ * `YYYY-MM` or a full `YYYY-MM-DD`; returns "" when absent/unparseable.
+ */
+export function normalizeGoalMonth(raw?: string): string {
+  if (!raw) return "";
+  const t = raw.trim();
+  if (/^\d{4}-\d{2}$/.test(t)) return `${t}-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  return "";
+}
+
+/**
+ * Merge voice-captured goals into the staged pending-goals list, deduping by
+ * case-insensitive title so the coach calling `update_fields` repeatedly (it's
+ * told to resend the full list) doesn't create duplicates. Existing entries
+ * keep their `tempId` so the editor list stays stable while the student talks.
+ */
+export function mergeVoiceGoals(
+  existing: PendingGoal[],
+  incoming: VoiceGoalInput[],
+): PendingGoal[] {
+  const byTitle = new Map<string, PendingGoal>();
+  for (const g of existing) byTitle.set(g.title.toLowerCase(), g);
+  for (const vg of incoming) {
+    const title = (vg.title ?? "").trim();
+    if (!title) continue;
+    const key = title.toLowerCase();
+    const prev = byTitle.get(key);
+    const target_date = normalizeGoalMonth(vg.target_date);
+    byTitle.set(key, {
+      tempId: prev?.tempId ?? `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title,
+      // Keep a previously captured target date if the new mention omits one.
+      target_date: target_date || prev?.target_date || "",
+    });
+  }
+  return Array.from(byTitle.values());
+}
+
 /**
  * Lightweight goals editor used inside the New Activity / New Award modal —
  * before the parent row exists in the DB. The goals collected here are

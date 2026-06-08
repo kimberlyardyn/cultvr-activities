@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   AwardVoiceCoach,
@@ -30,6 +30,7 @@ const DEFAULT_TAGS = [
 
 import {
   createAwardFull,
+  createLinkedGoal,
   deleteAward,
   reorderAwards,
   updateAwardFull,
@@ -38,6 +39,8 @@ import { LinkedGoals } from "@/components/linked-goals";
 import { toast } from "@/components/toast";
 import {
   PendingGoalsEditor,
+  mergeVoiceGoals,
+  normalizeGoalMonth,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
 import type { Activity, Award, Goal } from "@/lib/types";
@@ -480,6 +483,9 @@ function AwardEditor({
   const [pendingGoals, setPendingGoals] = useState<PendingGoal[]>([]);
   const [isPending, startTransition] = useTransition();
   const isNew = !draft.id;
+  // Tracks goal titles already persisted live (existing-award voice flow) so
+  // the coach resending its full list doesn't insert duplicates.
+  const savedVoiceGoalsRef = useRef<Set<string>>(new Set());
 
   const handleVoiceUpdate = useCallback((u: AwardVoiceUpdate) => {
     setDraft((d) => ({
@@ -493,7 +499,31 @@ function AwardEditor({
       ...(u.requirements !== undefined ? { requirements: u.requirements } : null),
       ...(u.tags !== undefined ? { tags: u.tags } : null),
     }));
-  }, []);
+
+    // Goals the coach captured. For a NEW award, stage them on the draft so
+    // they save with the award on create. For an EXISTING award the
+    // pending-goals editor isn't shown, so persist each new goal immediately.
+    if (u.goals?.length) {
+      if (initial.id) {
+        for (const g of u.goals) {
+          const title = g.title.trim();
+          const key = title.toLowerCase();
+          if (title.length < 2 || savedVoiceGoalsRef.current.has(key)) continue;
+          savedVoiceGoalsRef.current.add(key);
+          const fd = new FormData();
+          fd.set("title", title);
+          const target = normalizeGoalMonth(g.target_date);
+          if (target) fd.set("target_date", target);
+          fd.set("award_id", initial.id);
+          startTransition(() => {
+            void createLinkedGoal(fd);
+          });
+        }
+      } else {
+        setPendingGoals((cur) => mergeVoiceGoals(cur, u.goals!));
+      }
+    }
+  }, [initial.id]);
 
   const draftSummary = useMemo(() => {
     const parts: string[] = [];

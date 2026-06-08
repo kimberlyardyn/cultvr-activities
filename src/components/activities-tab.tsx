@@ -15,11 +15,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   commitImportedActivities,
   createActivity,
+  createLinkedGoal,
   createNoteForActivity,
   deleteActivity,
   getResumeProfile,
@@ -39,6 +40,8 @@ import { toast } from "@/components/toast";
 import { exportAsDocx, exportAsPdf } from "@/lib/export-doc";
 import {
   PendingGoalsEditor,
+  mergeVoiceGoals,
+  normalizeGoalMonth,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
 import type { Activity, Award, Goal, Note, ResumeProfile } from "@/lib/types";
@@ -894,6 +897,9 @@ function ActivityEditor({
   const [exportOpen, setExportOpen] = useState(false);
   const isNew = !draft.id;
   const charCount = draft.description.length;
+  // Tracks goal titles already persisted live (existing-activity voice flow)
+  // so the coach resending its full list doesn't insert duplicates.
+  const savedVoiceGoalsRef = useRef<Set<string>>(new Set());
 
   const update = useCallback(
     <K extends keyof ActivityDraft>(key: K, value: ActivityDraft[K]) => {
@@ -968,7 +974,31 @@ function ActivityEditor({
       ...(u.weeks_per_year !== undefined ? { weeks_per_year: u.weeks_per_year } : null),
       ...(u.tags !== undefined ? { tags: u.tags } : null),
     }));
-  }, []);
+
+    // Goals the coach captured. For a NEW activity, stage them on the draft so
+    // they save with the activity on create. For an EXISTING activity the
+    // pending-goals editor isn't shown, so persist each new goal immediately.
+    if (u.goals?.length) {
+      if (initial.id) {
+        for (const g of u.goals) {
+          const title = g.title.trim();
+          const key = title.toLowerCase();
+          if (title.length < 2 || savedVoiceGoalsRef.current.has(key)) continue;
+          savedVoiceGoalsRef.current.add(key);
+          const fd = new FormData();
+          fd.set("title", title);
+          const target = normalizeGoalMonth(g.target_date);
+          if (target) fd.set("target_date", target);
+          fd.set("activity_id", initial.id);
+          startTransition(() => {
+            void createLinkedGoal(fd);
+          });
+        }
+      } else {
+        setPendingGoals((cur) => mergeVoiceGoals(cur, u.goals!));
+      }
+    }
+  }, [initial.id]);
 
   const draftSummary = useMemo(() => summarizeDraft(draft), [draft]);
 
