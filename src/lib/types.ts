@@ -114,6 +114,18 @@ export type StudentAdmissionsProfile = {
   updated_at: string;
 };
 
+/** One school on the résumé Education section. `school` is the only required
+ *  field; the rest are optional. `details` holds AP/IB courses, Dean's List,
+ *  relevant coursework, etc. */
+export type ResumeEducation = {
+  school: string;
+  degree: string | null;
+  location: string | null;
+  graduation: string | null; // anticipated/awarded, e.g. "Expected May 2026"
+  gpa: string | null;
+  details: string | null;
+};
+
 export type ResumeProfile = {
   full_name: string | null;
   email: string | null;
@@ -121,6 +133,9 @@ export type ResumeProfile = {
   location: string | null;
   links: string | null;
   summary: string | null;
+  education: ResumeEducation[];
+  skills: string | null;
+  interests: string | null;
 };
 
 export type StudentMemory = {

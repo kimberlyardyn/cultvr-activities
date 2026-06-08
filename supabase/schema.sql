@@ -175,6 +175,9 @@ create table if not exists public.resume_profiles (
   location text,
   links text,
   summary text,
+  education jsonb not null default '[]'::jsonb,  -- array of { school, degree, location, graduation, gpa, details }
+  skills text,
+  interests text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

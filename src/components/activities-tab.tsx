@@ -46,7 +46,15 @@ import {
   normalizeGoalMonth,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
-import type { Activity, Award, Goal, GuidedSession, Note, ResumeProfile } from "@/lib/types";
+import type {
+  Activity,
+  Award,
+  Goal,
+  GuidedSession,
+  Note,
+  ResumeEducation,
+  ResumeProfile,
+} from "@/lib/types";
 
 const CATEGORIES = [
   "Academic",
@@ -2195,10 +2203,12 @@ function BulkExportModal({
 
     const blocks: string[] = [];
 
-    // Resume header (resume format only).
+    // Resume header + education (resume format only) — top of the resume.
     if (format === "resume") {
       const header = formatResumeHeader(resumeProfile);
       if (header) blocks.push(header);
+      const edu = formatEducationBlock(resumeProfile?.education ?? []);
+      if (edu) blocks.push(edu);
     }
 
     // Activities.
@@ -2210,6 +2220,14 @@ function BulkExportModal({
     // Awards — always appended.
     const awardsBlock = formatAwardsBlock(awards, format);
     if (awardsBlock) blocks.push(awardsBlock);
+
+    // Skills & interests (resume format only) — bottom of the resume.
+    if (format === "resume") {
+      const skills = formatSimpleSection("SKILLS", resumeProfile?.skills);
+      if (skills) blocks.push(skills);
+      const interests = formatSimpleSection("INTERESTS", resumeProfile?.interests);
+      if (interests) blocks.push(interests);
+    }
 
     return blocks.join("\n\n\n");
   }, [format, activities, awards, resumeProfile]);
@@ -2696,4 +2714,46 @@ function formatResumeHeader(p: ResumeProfile | null): string {
   if (!lines.length) return "";
   lines.push("══════════════════════════════════════");
   return lines.join("\n");
+}
+
+/** EDUCATION block — one entry per school. Returns "" if no schools set. */
+function formatEducationBlock(education: ResumeEducation[]): string {
+  const rows = education.filter((e) => (e.school ?? "").trim());
+  if (!rows.length) return "";
+  const lines: string[] = ["EDUCATION"];
+  rows.forEach((e, i) => {
+    if (i > 0) lines.push("");
+    // School on the left, location/graduation as right-hand meta.
+    const right = [e.location, e.graduation]
+      .map((x) => (x ?? "").trim())
+      .filter(Boolean)
+      .join("  ·  ");
+    const school = e.school.trim();
+    lines.push(right ? `${school}    ${right}` : school);
+    // Degree + GPA on the second line.
+    const second = [e.degree?.trim(), e.gpa?.trim() ? `GPA ${e.gpa.trim()}` : ""]
+      .filter(Boolean)
+      .join("  ·  ");
+    if (second) lines.push(`  ${second}`);
+    // AP/IB, Dean's List, coursework — one bullet per line.
+    (e.details ?? "")
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((s) => lines.push(`  • ${s}`));
+  });
+  return lines.join("\n");
+}
+
+/** A simple titled section (SKILLS / INTERESTS). Multi-line input becomes
+ *  bullets; a single line is kept inline. Returns "" if empty. */
+function formatSimpleSection(heading: string, body: string | null | undefined): string {
+  const text = (body ?? "").trim();
+  if (!text) return "";
+  const lines = text
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return `${heading}\n${text}`;
+  return [heading, ...lines.map((s) => `  • ${s}`)].join("\n");
 }

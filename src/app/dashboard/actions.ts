@@ -11,7 +11,7 @@ import {
 } from "@/lib/student-profile";
 import { deriveMemoriesFromSession } from "@/lib/student-context";
 import { createClient } from "@/lib/supabase/server";
-import type { AdminInstruction } from "@/lib/types";
+import type { AdminInstruction, ResumeEducation, ResumeProfile } from "@/lib/types";
 
 const noteSchema = z.object({
   title: z.string().min(2).max(120),
@@ -1259,6 +1259,15 @@ export async function updateStudentAdmissionsProfile(
 
 // ── Resume profile (header / contact details) ────────────────────────────────
 
+const resumeEducationSchema = z.object({
+  school: z.string().max(160).optional().nullable(),
+  degree: z.string().max(160).optional().nullable(),
+  location: z.string().max(160).optional().nullable(),
+  graduation: z.string().max(120).optional().nullable(),
+  gpa: z.string().max(40).optional().nullable(),
+  details: z.string().max(600).optional().nullable(),
+});
+
 const resumeProfileSchema = z.object({
   fullName: z.string().max(120).optional(),
   email: z.string().max(160).optional(),
@@ -1266,16 +1275,24 @@ const resumeProfileSchema = z.object({
   location: z.string().max(160).optional(),
   links: z.string().max(400).optional(),
   summary: z.string().max(600).optional(),
+  education: z.array(resumeEducationSchema).max(20).optional(),
+  skills: z.string().max(1500).optional(),
+  interests: z.string().max(1500).optional(),
 });
 
-export async function getResumeProfile() {
+export async function getResumeProfile(): Promise<ResumeProfile | null> {
   const { supabase, user } = await requireUser();
   const { data } = await supabase
     .from("resume_profiles")
-    .select("full_name, email, phone, location, links, summary")
+    .select("full_name, email, phone, location, links, summary, education, skills, interests")
     .eq("user_id", user.id)
     .maybeSingle();
-  return data ?? null;
+  if (!data) return null;
+  return {
+    ...data,
+    // education is jsonb; normalise to a typed array regardless of stored shape.
+    education: Array.isArray(data.education) ? (data.education as ResumeEducation[]) : [],
+  };
 }
 
 export async function updateResumeProfile(
@@ -1283,6 +1300,19 @@ export async function updateResumeProfile(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { supabase, user } = await requireUser();
   const parsed = resumeProfileSchema.parse(input);
+
+  // Drop blank education rows (no school) and trim every field so the stored
+  // JSON stays clean. A row needs a school name to be worth keeping.
+  const education = (parsed.education ?? [])
+    .map((e) => ({
+      school: e.school?.trim() || "",
+      degree: e.degree?.trim() || null,
+      location: e.location?.trim() || null,
+      graduation: e.graduation?.trim() || null,
+      gpa: e.gpa?.trim() || null,
+      details: e.details?.trim() || null,
+    }))
+    .filter((e) => e.school);
 
   const { error } = await supabase.from("resume_profiles").upsert(
     {
@@ -1293,6 +1323,9 @@ export async function updateResumeProfile(
       location: parsed.location?.trim() || null,
       links: parsed.links?.trim() || null,
       summary: parsed.summary?.trim() || null,
+      education,
+      skills: parsed.skills?.trim() || null,
+      interests: parsed.interests?.trim() || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },
