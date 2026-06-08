@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  FileText,
   Mic,
   Pencil,
   Plus,
@@ -36,14 +37,17 @@ import {
   updateAwardFull,
 } from "@/app/dashboard/actions";
 import { LinkedGoals } from "@/components/linked-goals";
+import { AssociatedWorkSection } from "@/components/associated-work-section";
+import { ExportPreview } from "@/components/activities-tab";
 import { toast } from "@/components/toast";
+import { buildAwardRecordText, collectAssociatedWork } from "@/lib/associated-record";
 import {
   PendingGoalsEditor,
   mergeVoiceGoals,
   normalizeGoalMonth,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
-import type { Activity, Award, Goal } from "@/lib/types";
+import type { Activity, Award, Goal, GuidedSession, Note } from "@/lib/types";
 
 const LEVELS = ["School", "Regional", "State", "National", "International", "Other"];
 
@@ -152,10 +156,14 @@ export function AwardsTab({
   awards,
   activities,
   goals,
+  notes = [],
+  guidedSessions = [],
 }: {
   awards: Award[];
   activities: Activity[];
   goals: Goal[];
+  notes?: Note[];
+  guidedSessions?: GuidedSession[];
 }) {
   const [editing, setEditing] = useState<{ draft: AwardDraft; voiceFirst: boolean } | null>(null);
   const [, startTransition] = useTransition();
@@ -292,6 +300,8 @@ export function AwardsTab({
               ? goals.filter((g) => g.award_id === editing.draft.id)
               : []
           }
+          notes={notes}
+          sessions={guidedSessions}
           onCancel={() => setEditing(null)}
           onSaved={() => setEditing(null)}
         />
@@ -470,6 +480,8 @@ function AwardEditor({
   onSaved,
   voiceFirst = false,
   existingGoals = [],
+  notes = [],
+  sessions = [],
 }: {
   draft: AwardDraft;
   activities: Activity[];
@@ -477,11 +489,14 @@ function AwardEditor({
   onSaved: () => void;
   voiceFirst?: boolean;
   existingGoals?: Goal[];
+  notes?: Note[];
+  sessions?: GuidedSession[];
 }) {
   const [draft, setDraft] = useState<AwardDraft>(initial);
   const [newTag, setNewTag] = useState("");
   const [pendingGoals, setPendingGoals] = useState<PendingGoal[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [exportOpen, setExportOpen] = useState(false);
   const isNew = !draft.id;
   // Tracks goal titles already persisted live (existing-award voice flow) so
   // the coach resending its full list doesn't insert duplicates.
@@ -536,6 +551,28 @@ function AwardEditor({
     if (draft.tags.length) parts.push(`tags=[${draft.tags.join(",")}]`);
     return parts.join("; ");
   }, [draft]);
+
+  // Brainstorm sessions + notes linked to this (already-saved) award, and the
+  // bundled "Full record" export text. Empty for a brand-new award.
+  const associated = useMemo(
+    () =>
+      initial.id
+        ? collectAssociatedWork({
+            kind: "award",
+            id: initial.id,
+            notes,
+            goals: existingGoals,
+            sessions,
+          })
+        : { notes: [], sessions: [] },
+    [initial.id, notes, existingGoals, sessions],
+  );
+
+  const fullRecordText = useMemo(
+    () =>
+      initial.id ? buildAwardRecordText(awardDraftToAward(draft), existingGoals, associated) : "",
+    [initial.id, draft, existingGoals, associated],
+  );
 
   const update = useCallback(<K extends keyof AwardDraft>(key: K, value: AwardDraft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -745,7 +782,44 @@ function AwardEditor({
               goals={existingGoals}
             />
           )}
+
+          {/* Brainstorm sessions & notes linked to this award (existing only) */}
+          {!isNew && (
+            <AssociatedWorkSection notes={associated.notes} sessions={associated.sessions} />
+          )}
+
+          {/* Export this award — full record (goals, sessions & notes) or resume line */}
+          {!isNew && draft.name.trim() ? (
+            <div className="border-t border-[color:var(--almanac-rule)] pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-[color:var(--almanac-ink)]">
+                    Export this award
+                  </p>
+                  <p className="mt-0.5 text-[0.7rem] leading-4 text-[color:var(--almanac-ink-soft)]">
+                    Copy it as a resume entry, or export the full record with goals, sessions & notes.
+                  </p>
+                </div>
+                <button
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+                  onClick={() => setExportOpen(true)}
+                  type="button"
+                >
+                  <FileText size={13} />
+                  Export
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
+
+        {exportOpen ? (
+          <AwardExportModal
+            award={awardDraftToAward(draft)}
+            fullRecordText={fullRecordText}
+            onClose={() => setExportOpen(false)}
+          />
+        ) : null}
 
         <footer className="flex items-center justify-end gap-2 border-t border-[color:var(--almanac-rule)] px-6 py-4">
           <button
@@ -764,6 +838,105 @@ function AwardEditor({
             {isPending ? "Saving…" : draft.id ? "Update award" : "Save award"}
           </button>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+function awardDraftToAward(d: AwardDraft): Award {
+  return {
+    id: d.id ?? "draft",
+    name: d.name,
+    scope: d.scope || null,
+    year: d.year || null,
+    organization: d.organization || null,
+    description: d.description || null,
+    requirements: d.requirements || null,
+    level: d.level || null,
+    activity_id: d.activity_id || null,
+    tags: d.tags,
+    sort_order: 0,
+    created_at: new Date().toISOString(),
+  };
+}
+
+/** Resume-style honor line for a single award. */
+function formatAwardResumeLine(a: Award): string {
+  const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(" · ");
+  const lines = [a.name];
+  if (meta) lines.push(meta);
+  if (a.description) lines.push(a.description);
+  return lines.join("\n");
+}
+
+type AwardExportTab = "full" | "resume";
+
+function AwardExportModal({
+  award,
+  fullRecordText,
+  onClose,
+}: {
+  award: Award;
+  fullRecordText: string;
+  onClose: () => void;
+}) {
+  const hasFull = Boolean(fullRecordText && fullRecordText.trim());
+  const [tab, setTab] = useState<AwardExportTab>(hasFull ? "full" : "resume");
+
+  const generated = tab === "full" ? fullRecordText : formatAwardResumeLine(award);
+  const formatLabel = tab === "full" ? "Full record" : "Resume";
+
+  const tabs: Array<[AwardExportTab, string]> = [
+    ...(hasFull ? ([["full", "Full record"]] as Array<[AwardExportTab, string]>) : []),
+    ["resume", "Resume"],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
+      <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-6 py-4">
+          <div>
+            <h3 className="font-serif text-2xl text-[color:var(--almanac-ink)]">Export</h3>
+            <p className="text-xs text-[color:var(--almanac-ink-soft)]">{award.name}</p>
+          </div>
+          <button
+            className="rounded-full p-1.5 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        <div className="border-b border-[color:var(--almanac-rule)] px-6 pt-4">
+          <div className="inline-flex gap-1 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-1">
+            {tabs.map(([id, label]) => {
+              const active = tab === id;
+              return (
+                <button
+                  className={[
+                    "rounded-full px-4 py-1.5 text-xs font-medium transition",
+                    active
+                      ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
+                      : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
+                  ].join(" ")}
+                  key={id}
+                  onClick={() => setTab(id)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <ExportPreview
+          key={tab}
+          docTitle={`${award.name} — ${formatLabel}`}
+          fileBase={`${award.name}-${formatLabel}`}
+          initialText={generated}
+        />
       </div>
     </div>
   );

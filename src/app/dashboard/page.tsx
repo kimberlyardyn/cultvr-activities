@@ -80,7 +80,7 @@ export default async function DashboardPage({
       .limit(12),
     supabase
       .from("notes")
-      .select("id,title,body,category,activity_id,created_at,updated_at")
+      .select("id,title,body,category,activity_id,award_id,created_at,updated_at")
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
@@ -121,7 +121,7 @@ export default async function DashboardPage({
         "id,session_type,session_label,focus,interaction_mode,status,transcript,summary,prompt_count,answered_count,note_id,goal_id,task_id,started_at,completed_at,created_at",
       )
       .order("created_at", { ascending: false })
-      .limit(4),
+      .limit(100),
     supabase
       .from("weekly_challenges")
       .select("id,title,category,description,week_start_date,status,completed_at,created_at,updated_at")

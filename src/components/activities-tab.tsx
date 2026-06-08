@@ -36,15 +36,17 @@ import {
   type VoiceFieldUpdate,
 } from "@/components/activity-voice-coach";
 import { LinkedGoals } from "@/components/linked-goals";
+import { AssociatedWorkSection } from "@/components/associated-work-section";
 import { toast } from "@/components/toast";
 import { exportAsDocx, exportAsPdf } from "@/lib/export-doc";
+import { buildActivityRecordText, collectAssociatedWork } from "@/lib/associated-record";
 import {
   PendingGoalsEditor,
   mergeVoiceGoals,
   normalizeGoalMonth,
   type PendingGoal,
 } from "@/components/pending-goals-editor";
-import type { Activity, Award, Goal, Note, ResumeProfile } from "@/lib/types";
+import type { Activity, Award, Goal, GuidedSession, Note, ResumeProfile } from "@/lib/types";
 
 const CATEGORIES = [
   "Academic",
@@ -243,11 +245,13 @@ export function ActivitiesTab({
   awards,
   notes,
   goals,
+  guidedSessions = [],
 }: {
   activities: Activity[];
   awards?: Award[];
   notes: Note[];
   goals: Goal[];
+  guidedSessions?: GuidedSession[];
 }) {
   const [editing, setEditing] = useState<{ draft: ActivityDraft; voiceFirst: boolean } | null>(null);
   const [importing, setImporting] = useState(false);
@@ -412,6 +416,8 @@ export function ActivitiesTab({
               ? goals.filter((g) => g.activity_id === editing.draft.id)
               : []
           }
+          notes={notes}
+          sessions={guidedSessions}
           onCancel={() => setEditing(null)}
           onSaved={() => setEditing(null)}
         />
@@ -883,12 +889,16 @@ function ActivityEditor({
   onSaved,
   voiceFirst = false,
   existingGoals = [],
+  notes = [],
+  sessions = [],
 }: {
   draft: ActivityDraft;
   onCancel: () => void;
   onSaved: () => void;
   voiceFirst?: boolean;
   existingGoals?: Goal[];
+  notes?: Note[];
+  sessions?: GuidedSession[];
 }) {
   const [draft, setDraft] = useState<ActivityDraft>(initial);
   const [newTag, setNewTag] = useState("");
@@ -1001,6 +1011,31 @@ function ActivityEditor({
   }, [initial.id]);
 
   const draftSummary = useMemo(() => summarizeDraft(draft), [draft]);
+
+  // Brainstorm sessions + notes linked to this (already-saved) activity, and
+  // the bundled "Full record" export text built from the entry, its goals, and
+  // that associated work. Empty for a brand-new activity that has no id yet.
+  const associated = useMemo(
+    () =>
+      initial.id
+        ? collectAssociatedWork({
+            kind: "activity",
+            id: initial.id,
+            notes,
+            goals: existingGoals,
+            sessions,
+          })
+        : { notes: [], sessions: [] },
+    [initial.id, notes, existingGoals, sessions],
+  );
+
+  const fullRecordText = useMemo(
+    () =>
+      initial.id
+        ? buildActivityRecordText(draftToActivity(draft), existingGoals, associated)
+        : "",
+    [initial.id, draft, existingGoals, associated],
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
@@ -1191,6 +1226,11 @@ function ActivityEditor({
             />
           )}
 
+          {/* Brainstorm sessions & notes linked to this activity (existing only) */}
+          {!isNew && (
+            <AssociatedWorkSection notes={associated.notes} sessions={associated.sessions} />
+          )}
+
           {/* Export this single activity — lives at the very bottom of the editor. */}
           {draft.name.trim() ? (
             <div className="border-t border-[color:var(--almanac-rule)] pt-4">
@@ -1200,7 +1240,11 @@ function ActivityEditor({
                     Export this activity
                   </p>
                   <p className="mt-0.5 text-[0.7rem] leading-4 text-[color:var(--almanac-ink-soft)]">
-                    Copy it as a Common App, UC, or resume entry.
+                    Copy it as a Common App, UC, or resume entry
+                    {fullRecordText
+                      ? ", or export the full record with goals, sessions & notes"
+                      : ""}
+                    .
                   </p>
                 </div>
                 <button
@@ -1219,6 +1263,7 @@ function ActivityEditor({
         {exportOpen ? (
           <ExportModal
             activity={draftToActivity(draft)}
+            fullRecordText={fullRecordText}
             onClose={() => setExportOpen(false)}
           />
         ) : null}
@@ -2024,16 +2069,42 @@ function ReviewAwardCard({
 // EXPORT MODAL — Common App / UC / Resume formatters
 // ============================================================================
 
-function ExportModal({ activity, onClose }: { activity: Activity; onClose: () => void }) {
-  const [tab, setTab] = useState<"commonapp" | "uc" | "resume">("commonapp");
+type ExportTab = "commonapp" | "uc" | "resume" | "full";
+
+function ExportModal({
+  activity,
+  fullRecordText,
+  onClose,
+}: {
+  activity: Activity;
+  fullRecordText?: string;
+  onClose: () => void;
+}) {
+  const hasFull = Boolean(fullRecordText && fullRecordText.trim());
+  const [tab, setTab] = useState<ExportTab>("commonapp");
 
   const generated = useMemo(() => {
+    if (tab === "full") return fullRecordText ?? "";
     if (tab === "commonapp") return formatCommonApp(activity);
     if (tab === "uc") return formatUC(activity);
     return formatResume(activity);
-  }, [tab, activity]);
+  }, [tab, activity, fullRecordText]);
 
-  const formatLabel = tab === "commonapp" ? "Common App" : tab === "uc" ? "UC" : "Resume";
+  const formatLabel =
+    tab === "commonapp"
+      ? "Common App"
+      : tab === "uc"
+        ? "UC"
+        : tab === "full"
+          ? "Full record"
+          : "Resume";
+
+  const tabs: Array<[ExportTab, string]> = [
+    ["commonapp", "Common App"],
+    ["uc", "UC App"],
+    ["resume", "Resume"],
+    ...(hasFull ? ([["full", "Full record"]] as Array<[ExportTab, string]>) : []),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
@@ -2054,11 +2125,7 @@ function ExportModal({ activity, onClose }: { activity: Activity; onClose: () =>
 
         <div className="border-b border-[color:var(--almanac-rule)] px-6 pt-4">
           <div className="inline-flex gap-1 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-1">
-            {([
-              ["commonapp", "Common App"],
-              ["uc", "UC App"],
-              ["resume", "Resume"],
-            ] as const).map(([id, label]) => {
+            {tabs.map(([id, label]) => {
               const active = tab === id;
               return (
                 <button
@@ -2086,7 +2153,7 @@ function ExportModal({ activity, onClose }: { activity: Activity; onClose: () =>
           docTitle={`${activity.name} — ${formatLabel}`}
           fileBase={`${activity.name}-${formatLabel}`}
           initialText={generated}
-          notes={<ExportNotes tab={tab} activity={activity} />}
+          notes={tab === "full" ? undefined : <ExportNotes tab={tab} activity={activity} />}
           ongoing={activity.in_progress}
         />
       </div>
@@ -2242,7 +2309,7 @@ function BulkExportModal({
  * tweak, then exports the (possibly edited) text as a copy, PDF, or Word file.
  * Edits here never touch the saved activity — export-only.
  */
-function ExportPreview({
+export function ExportPreview({
   charLimit,
   docTitle,
   fileBase,
