@@ -1066,6 +1066,8 @@ function ActivityEditor({
             autoStart={voiceFirst}
             onUpdate={handleVoiceUpdate}
             currentDraftSummary={draftSummary}
+            mode={isNew ? "add" : "edit"}
+            activityName={draft.name}
           />
 
           <Field label="Organization/Activity Name">

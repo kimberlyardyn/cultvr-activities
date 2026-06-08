@@ -29,6 +29,11 @@ type Props = {
   currentDraftSummary?: string;
   /** If true, immediately request mic and start the session on mount. */
   autoStart?: boolean;
+  /** "add" for a new activity (default), "edit" when refining an existing one.
+   *  Controls the coach's opening line and whether it re-runs the full intake. */
+  mode?: "add" | "edit";
+  /** Name of the activity being edited — used in the edit-mode opening line. */
+  activityName?: string;
 };
 
 const COACH_INSTRUCTIONS = [
@@ -63,8 +68,132 @@ const COACH_INSTRUCTIONS = [
   "",
   "Category MUST be one of: Academic, Art, Athletic - Club, Athletic - JV/Varsity, Career-Oriented, Community Service (Volunteer), Computer/Technology, Cultural, Dance, Debate/Speech, Environmental, Family Responsibilities, Foreign Exchange, Internship, Journalism/Publication, LGBT, Music: Instrumental, Music: Vocal, Religious, Research, Robotics, School Spirit, Science/Math, Social Justice, Speech & Debate, Student Govt./Politics, Theater/Drama, Work (Paid), Other Club/Activity.",
   "",
-  "Your VERY FIRST line must be spoken exactly, word for word, with nothing before it — no greeting, filler, or acknowledgment like 'Sure', 'Okay', or 'Sounds great': \"Let's get started. What activity would you like to add today?\" When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
+  "When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
 ].join(" ");
+
+/**
+ * Builds the per-session opening directive. The coach's very first spoken line
+ * is pinned verbatim so it can't drift into filler ("Sounds great!"). In ADD
+ * mode it asks what to add; in EDIT mode it names the activity and asks what to
+ * change. The edit directive also stops the coach from re-running the full
+ * intake on an activity that's already filled in.
+ */
+function buildModeInstructions(mode: "add" | "edit", activityName?: string): string {
+  const name = (activityName ?? "").trim();
+  const opening =
+    mode === "edit"
+      ? name
+        ? `What would you like to edit or adjust related to ${name}?`
+        : "What would you like to edit or adjust about this activity?"
+      : "Let's get started. What activity would you like to add today?";
+
+  const openingDirective = `Your VERY FIRST line must be spoken exactly, word for word, with nothing before it — no greeting, filler, or acknowledgment like 'Sure', 'Okay', or 'Sounds great': "${opening}"`;
+
+  const editDirective =
+    mode === "edit"
+      ? `You are helping the student EDIT an existing activity that is already filled in${name ? ` ("${name}")` : ""}, NOT create a new one. Do NOT walk through every section like a fresh intake. Let the student lead: ask what they want to change, update only the fields they raise via update_fields, and confirm each change out loud. Still capture any goals the instant they come up.`
+      : "";
+
+  return [openingDirective, editDirective].filter(Boolean).join(" ");
+}
+
+// ── Deterministic goal backstop ──────────────────────────────────────────────
+// The coach is strongly instructed to capture goals via update_fields, but as a
+// safety net we ALSO scan the student's own transcript for explicit goal/target
+// phrasing and write it to the form directly. This guarantees a clearly-stated
+// goal lands even if the model forgets to call the tool. To avoid double-writing
+// when the model DOES capture, each detected goal is held briefly and dropped if
+// a fuzzily-equivalent goal was already seen (from the model or an earlier line).
+
+const GOAL_CUES: RegExp[] = [
+  /\bmy (?:goal|target|aim|objective|plan)\s+(?:is|would be|will be)\s+(?:to\s+)?(.+)/i,
+  /\b(?:i|we)\s+(?:want|hope|plan|aim|intend|aspire|wanna)\s+to\s+(.+)/i,
+  /\b(?:i'm|i am|we're|we are)\s+(?:hoping|planning|aiming|trying)\s+to\s+(.+)/i,
+  /\b(?:i'd|i would)\s+(?:like|love)\s+to\s+(.+)/i,
+  /\bgoal\s+of\s+(.+)/i,
+  /\blooking\s+to\s+(.+)/i,
+];
+
+// First verbs that signal conversation rather than a goal — skip these.
+const NON_GOAL_VERBS = new Set([
+  "add", "tell", "talk", "say", "share", "mention", "note",
+  "explain", "describe", "clarify", "confirm", "skip", "ask", "know", "see",
+]);
+
+const GOAL_STOPWORDS = new Set([
+  "to", "the", "a", "an", "of", "for", "my", "our", "i", "we", "want", "wanna",
+  "hope", "hoping", "plan", "planning", "aim", "aiming", "like", "would", "be",
+  "this", "that", "and", "or", "by", "in", "on", "at", "with", "next", "year",
+]);
+
+const MONTHS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/** Content-word token set used to compare two goals for rough equivalence. */
+function goalTokens(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 1 && !GOAL_STOPWORDS.has(w)),
+  );
+}
+
+/** True when two token sets overlap enough to be considered the same goal. */
+function goalsSimilar(a: Set<string>, b: Set<string>): boolean {
+  if (!a.size || !b.size) return false;
+  let inter = 0;
+  for (const w of a) if (b.has(w)) inter += 1;
+  const union = a.size + b.size - inter;
+  return union > 0 && inter / union >= 0.5;
+}
+
+/** Conservatively pull an explicit target month (YYYY-MM) from a sentence. Only
+ *  fires on a real month name to avoid guessing wrong dates from vague phrases. */
+function extractTargetMonth(sentence: string): string | undefined {
+  const m = sentence
+    .toLowerCase()
+    .match(
+      /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b(?:\s+(\d{4}))?/,
+    );
+  if (!m) return undefined;
+  const month = MONTHS[m[1]];
+  if (!month) return undefined;
+  let year = m[2] ? Number.parseInt(m[2], 10) : new Date().getFullYear();
+  // No explicit year and the month already passed → assume next year.
+  if (!m[2] && month < new Date().getMonth() + 1) year += 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function toGoalTitle(clause: string): string {
+  let t = clause.replace(/\s+/g, " ").replace(/[\s.,;:!?]+$/, "").trim();
+  if (!t) return t;
+  if (t.length > 90) t = `${t.slice(0, 88).trim()}…`;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** Detect explicit goals stated in the student's own words. */
+function detectGoalsInTranscript(transcript: string): Array<{ title: string; target_date?: string }> {
+  const out: Array<{ title: string; target_date?: string }> = [];
+  for (const raw of transcript.split(/(?<=[.!?])\s+|\n+/)) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    for (const cue of GOAL_CUES) {
+      const m = cue.exec(sentence);
+      if (!m) continue;
+      const clause = (m[1] ?? "").trim().replace(/[.,;:!?]+$/, "");
+      const words = clause.split(/\s+/);
+      if (words.length < 2) break; // too short to be a real goal
+      if (NON_GOAL_VERBS.has(words[0].toLowerCase())) break; // conversational
+      out.push({ title: toGoalTitle(clause), target_date: extractTargetMonth(sentence) });
+      break; // at most one goal per sentence
+    }
+  }
+  return out;
+}
 
 const UPDATE_FIELDS_TOOL = {
   type: "function",
@@ -122,7 +251,13 @@ const UPDATE_FIELDS_TOOL = {
   },
 };
 
-export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = false }: Props) {
+export function ActivityVoiceCoach({
+  onUpdate,
+  currentDraftSummary,
+  autoStart = false,
+  mode = "add",
+  activityName,
+}: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +268,10 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
   const coachItemIdRef = useRef<string | null>(null);
   const studentDraftRef = useRef("");
   const coachDraftRef = useRef("");
+  // Goal backstop: token sets of goals already captured this session (from the
+  // model or a prior line), plus pending debounce timers keyed by goal signature.
+  const seenGoalTokensRef = useRef<Set<string>[]>([]);
+  const goalTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const cleanup = useCallback((resetStatus = true) => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -144,6 +283,9 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
     coachItemIdRef.current = null;
     studentDraftRef.current = "";
     coachDraftRef.current = "";
+    goalTimersRef.current.forEach((t) => clearTimeout(t));
+    goalTimersRef.current.clear();
+    seenGoalTokensRef.current = [];
     if (resetStatus) setStatus("idle");
   }, []);
 
@@ -207,6 +349,9 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
     setError(null);
     setMessages([]);
     setStatus("connecting");
+    goalTimersRef.current.forEach((t) => clearTimeout(t));
+    goalTimersRef.current.clear();
+    seenGoalTokensRef.current = [];
 
     try {
       const tokenRes = await fetch("/api/activity-voice-token", { method: "POST" });
@@ -232,9 +377,14 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
 
       channel.addEventListener("open", () => {
         const sessionInstruction = [
+          buildModeInstructions(mode, activityName),
           COACH_INSTRUCTIONS,
           currentDraftSummary
-            ? `Current form state: ${currentDraftSummary}. Don't ask about fields that are already filled — focus on missing details.`
+            ? `Current form state: ${currentDraftSummary}.${
+                mode === "edit"
+                  ? ""
+                  : " Don't ask about fields that are already filled — focus on missing details."
+              }`
             : "",
         ]
           .filter(Boolean)
@@ -281,6 +431,25 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
             payload.transcript,
             true,
           );
+
+          // Deterministic backstop: capture explicit goals from the student's
+          // own words even if the model never calls update_fields. Each is held
+          // briefly so a model capture (recorded in seenGoalTokensRef) can
+          // pre-empt it and we don't write the same goal twice.
+          for (const goal of detectGoalsInTranscript(payload.transcript)) {
+            const tokens = goalTokens(goal.title);
+            if (!tokens.size) continue;
+            const sig = [...tokens].sort().join(" ");
+            if (goalTimersRef.current.has(sig)) continue;
+            if (seenGoalTokensRef.current.some((t) => goalsSimilar(t, tokens))) continue;
+            const timer = setTimeout(() => {
+              goalTimersRef.current.delete(sig);
+              if (seenGoalTokensRef.current.some((t) => goalsSimilar(t, tokens))) return;
+              seenGoalTokensRef.current.push(tokens);
+              onUpdate({ goals: [goal] });
+            }, 2000);
+            goalTimersRef.current.set(sig, timer);
+          }
         }
         if (payload.type === "conversation.item.input_audio_transcription.delta" && payload.delta) {
           upsertMessage("student", payload.item_id ?? `student-${Date.now()}`, payload.delta);
@@ -304,6 +473,15 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
             const argString = payload.arguments ?? payload.function_call?.arguments ?? "{}";
             const args = JSON.parse(argString);
             applyUpdate(args, onUpdate);
+            // Record goals the model captured so the transcript backstop won't
+            // write an equivalent goal a second time.
+            if (Array.isArray(args.goals)) {
+              for (const g of args.goals) {
+                if (g && typeof g.title === "string" && g.title.trim()) {
+                  seenGoalTokensRef.current.push(goalTokens(g.title));
+                }
+              }
+            }
             // Send tool output so the model knows the call succeeded.
             channel.send(
               JSON.stringify({
@@ -346,7 +524,7 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
       setStatus("error");
       setError(e instanceof Error ? e.message : "Voice setup failed");
     }
-  }, [status, onUpdate, currentDraftSummary, upsertMessage, cleanup]);
+  }, [status, onUpdate, currentDraftSummary, mode, activityName, upsertMessage, cleanup]);
 
   const stop = useCallback(() => cleanup(), [cleanup]);
 
