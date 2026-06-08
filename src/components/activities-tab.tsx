@@ -1228,7 +1228,13 @@ function ActivityEditor({
 
           {/* Brainstorm sessions & notes linked to this activity (existing only) */}
           {!isNew && (
-            <AssociatedWorkSection notes={associated.notes} sessions={associated.sessions} />
+            <AssociatedWorkSection
+              parentId={draft.id!}
+              parentKind="activity"
+              notes={associated.notes}
+              allNotes={notes}
+              sessions={associated.sessions}
+            />
           )}
 
           {/* Export this single activity — lives at the very bottom of the editor. */}

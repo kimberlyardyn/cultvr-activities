@@ -785,7 +785,13 @@ function AwardEditor({
 
           {/* Brainstorm sessions & notes linked to this award (existing only) */}
           {!isNew && (
-            <AssociatedWorkSection notes={associated.notes} sessions={associated.sessions} />
+            <AssociatedWorkSection
+              parentId={draft.id!}
+              parentKind="award"
+              notes={associated.notes}
+              allNotes={notes}
+              sessions={associated.sessions}
+            />
           )}
 
           {/* Export this award — full record (goals, sessions & notes) or resume line */}

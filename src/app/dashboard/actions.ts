@@ -1072,6 +1072,43 @@ export async function createNoteForActivity(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+/** Link or unlink a note to an activity OR award. Pass an empty `parent_id`
+ *  to unlink. Touches only the relevant column, so an activity link and an
+ *  award link on the same note stay independent. */
+export async function tagNoteToParent(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const noteId = value(formData, "note_id");
+  const parentKind = value(formData, "parent_kind");
+  const parentId = value(formData, "parent_id") || null;
+  if (!noteId || (parentKind !== "activity" && parentKind !== "award")) return;
+  const patch =
+    parentKind === "activity"
+      ? { activity_id: parentId, updated_at: new Date().toISOString() }
+      : { award_id: parentId, updated_at: new Date().toISOString() };
+  await supabase.from("notes").update(patch).eq("id", noteId).eq("user_id", user.id);
+  revalidatePath("/dashboard");
+}
+
+/** Create a reflection note already linked to an activity OR award. */
+export async function createNoteForParent(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const title = value(formData, "title");
+  const body = value(formData, "body");
+  const parentKind = value(formData, "parent_kind");
+  const parentId = value(formData, "parent_id") || null;
+  if (!title || !body || (parentKind !== "activity" && parentKind !== "award")) return;
+  const link =
+    parentKind === "activity" ? { activity_id: parentId } : { award_id: parentId };
+  await supabase.from("notes").insert({
+    user_id: user.id,
+    title,
+    body,
+    category: "Reflection",
+    ...link,
+  });
+  revalidatePath("/dashboard");
+}
+
 export async function createAward(formData: FormData) {
   const { supabase, user } = await requireUser();
   const parsed = awardSchema.parse({
