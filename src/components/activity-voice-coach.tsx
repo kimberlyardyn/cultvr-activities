@@ -62,7 +62,7 @@ const COACH_INSTRUCTIONS = [
   "",
   "Category MUST be one of: Academic, Art, Athletic - Club, Athletic - JV/Varsity, Career-Oriented, Community Service (Volunteer), Computer/Technology, Cultural, Dance, Debate/Speech, Environmental, Family Responsibilities, Foreign Exchange, Internship, Journalism/Publication, LGBT, Music: Instrumental, Music: Vocal, Religious, Research, Robotics, School Spirit, Science/Math, Social Justice, Speech & Debate, Student Govt./Politics, Theater/Drama, Work (Paid), Other Club/Activity.",
   "",
-  "Start by warmly asking what activity they want to add. When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
+  "Your VERY FIRST line must be spoken exactly, word for word, with nothing before it — no greeting, filler, or acknowledgment like 'Sure', 'Okay', or 'Sounds great': \"Let's get started. What activity would you like to add today?\" When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
@@ -260,7 +260,7 @@ export function ActivityVoiceCoach({ onUpdate, currentDraftSummary, autoStart = 
             item: {
               type: "message",
               role: "user",
-              content: [{ type: "input_text", text: "Hi — let's get started." }],
+              content: [{ type: "input_text", text: "Begin the session now." }],
             },
           }),
         );
