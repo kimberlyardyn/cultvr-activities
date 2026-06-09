@@ -1692,7 +1692,9 @@ function QuickStatusButton({
 }
 
 function CollegeListForm() {
-  const [actionPlanDest, setActionPlanDest] = useState<"none" | "1year" | "longterm">("none");
+  const [actionPlanDest, setActionPlanDest] = useState<
+    "none" | "weekly" | "monthly" | "1year" | "longterm"
+  >("none");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -1765,11 +1767,15 @@ function CollegeListForm() {
           <select
             className="h-10 w-full rounded-lg border border-[color:var(--almanac-rule)] bg-white/65 px-3 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
             onChange={(e) =>
-              setActionPlanDest(e.target.value as "none" | "1year" | "longterm")
+              setActionPlanDest(
+                e.target.value as "none" | "weekly" | "monthly" | "1year" | "longterm",
+              )
             }
             value={actionPlanDest}
           >
             <option value="none">No, just here</option>
+            <option value="weekly">Yes — Weekly action plan</option>
+            <option value="monthly">Yes — Monthly action plan</option>
             <option value="1year">Yes — 1 Year action plan</option>
             <option value="longterm">Yes — Long-term action plan</option>
           </select>
@@ -1798,7 +1804,10 @@ function CollegeListForm() {
  * up immediately in the chosen window. Mirrors the structure used by
  * `ActionPlanView` in `almanac-workspace.tsx` (storage key `cultvr-action-plan-v3`).
  */
-function addTargetToActionPlan(windowId: "1year" | "longterm", text: string) {
+function addTargetToActionPlan(
+  windowId: "weekly" | "monthly" | "1year" | "longterm",
+  text: string,
+) {
   if (typeof window === "undefined") return;
   const STORAGE_KEY = "cultvr-action-plan-v3";
   type Item = { id: string; text: string; done: boolean };
@@ -1812,10 +1821,15 @@ function addTargetToActionPlan(windowId: "1year" | "longterm", text: string) {
     store = {};
   }
 
-  if (!store[windowId]) store[windowId] = { reaches: [], targets: [] };
-  if (!Array.isArray(store[windowId].targets)) store[windowId].targets = [];
+  // 1-Year / Long-term windows have a dedicated Targets list; Weekly / Monthly
+  // don't, so a target there lands in that window's Priority list.
+  const section = windowId === "1year" || windowId === "longterm" ? "targets" : "priority";
+  if (!store[windowId]) {
+    store[windowId] = { priority: [], secondary: [], reaches: [], targets: [] };
+  }
+  if (!Array.isArray(store[windowId][section])) store[windowId][section] = [];
 
-  store[windowId].targets.push({
+  store[windowId][section].push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     text,
     done: false,
