@@ -114,8 +114,52 @@ function toGoalTitle(clause: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-/** Detect explicit goals stated in the student's own words. */
-export function detectGoalsInTranscript(transcript: string): GoalCandidate[] {
+const NEGATIVE_ANSWER =
+  /^(?:no|nope|nah|none|not really|not right now|not at the moment|nothing(?: really| yet)?|i don'?t (?:know|think so)|i'?m not sure|no goals?|not yet)\b/i;
+
+/**
+ * True when a coach utterance is ASKING the student about goals/targets (so the
+ * next answer should be treated as a goal), as opposed to merely mentioning or
+ * acknowledging one.
+ */
+export function isGoalPrompt(text: string): boolean {
+  const t = text.toLowerCase();
+  if (!/\b(goals?|targets?)\b/.test(t)) return false;
+  // Skip acknowledgments / closing summaries that also contain "goal".
+  if (/\b(added to the form|i'?ve added|i'?ll add|got it|has been added|have been added)\b/.test(t)) {
+    return false;
+  }
+  return (
+    /\?/.test(t) ||
+    /\b(do you|is there|are there|what are your|tell me|any (?:other )?goals?|any (?:other )?targets?)\b/.test(t)
+  );
+}
+
+/** Clean a free-form answer into a goal title when we already know (from the
+ *  coach's question) that the student is stating a goal. */
+function goalFromAnswer(transcript: string): GoalCandidate | null {
+  const text = transcript.trim();
+  if (!text || NEGATIVE_ANSWER.test(text)) return null;
+  // Drop a conversational lead-in so the title starts at the goal itself.
+  const first = text.split(/(?<=[.!?])\s+|\n+/)[0]?.trim() ?? text;
+  const cleaned = first
+    .replace(
+      /^(?:(?:um+|uh+|er+|yeah|yep|yes|sure|okay|ok|well|so|i guess|i think|i'?d say|maybe|probably|honestly|like|kind of|sort of|my goal is|my target is)[\s,]+)+/i,
+      "",
+    )
+    .replace(/[.,;:!?]+$/, "")
+    .trim();
+  if (cleaned.split(/\s+/).filter(Boolean).length < 2) return null;
+  return { title: toGoalTitle(cleaned), target_date: extractTargetMonth(text) };
+}
+
+/**
+ * Detect explicit goals stated in the student's own words. When `assumeGoal` is
+ * true — i.e. the coach just asked about goals — a non-refusal answer is
+ * captured even without an explicit "I want to…" cue, so bare answers like
+ * "becoming club president" or "make it to nationals" still land in the form.
+ */
+export function detectGoalsInTranscript(transcript: string, assumeGoal = false): GoalCandidate[] {
   const out: GoalCandidate[] = [];
   for (const raw of transcript.split(/(?<=[.!?])\s+|\n+/)) {
     const sentence = raw.trim();
@@ -130,6 +174,10 @@ export function detectGoalsInTranscript(transcript: string): GoalCandidate[] {
       out.push({ title: toGoalTitle(clause), target_date: extractTargetMonth(sentence) });
       break; // at most one goal per sentence
     }
+  }
+  if (out.length === 0 && assumeGoal) {
+    const g = goalFromAnswer(transcript);
+    if (g) out.push(g);
   }
   return out;
 }

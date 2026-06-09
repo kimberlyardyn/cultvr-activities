@@ -8,6 +8,7 @@ import {
   detectGoalsInTranscript,
   goalsSimilar,
   goalTokens,
+  isGoalPrompt,
 } from "@/lib/voice-coach";
 
 export type AwardVoiceUpdate = {
@@ -137,6 +138,9 @@ export function AwardVoiceCoach({
   // Goal backstop bookkeeping (see src/lib/voice-coach.ts).
   const seenGoalTokensRef = useRef<Set<string>[]>([]);
   const goalTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // True after the coach asks about goals, so the next student answer is taken
+  // as a goal even without an explicit cue.
+  const coachAskedGoalRef = useRef(false);
 
   const cleanup = useCallback((resetStatus = true) => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -151,6 +155,7 @@ export function AwardVoiceCoach({
     goalTimersRef.current.forEach((t) => clearTimeout(t));
     goalTimersRef.current.clear();
     seenGoalTokensRef.current = [];
+    coachAskedGoalRef.current = false;
     if (resetStatus) setStatus("idle");
   }, []);
 
@@ -209,6 +214,7 @@ export function AwardVoiceCoach({
     goalTimersRef.current.forEach((t) => clearTimeout(t));
     goalTimersRef.current.clear();
     seenGoalTokensRef.current = [];
+    coachAskedGoalRef.current = false;
 
     try {
       const tokenRes = await fetch("/api/activity-voice-token", { method: "POST" });
@@ -282,10 +288,13 @@ export function AwardVoiceCoach({
         ) {
           upsertMessage("student", payload.item_id ?? `student-${Date.now()}`, payload.transcript, true);
 
-          // Deterministic backstop: capture explicit goals from the student's
-          // own words even if the model never calls update_fields. Held briefly
-          // so a model capture can pre-empt it and we don't write it twice.
-          for (const goal of detectGoalsInTranscript(payload.transcript)) {
+          // Deterministic backstop: capture goals from the student's own words
+          // even if the model never calls update_fields. If the coach just asked
+          // about goals, the answer is captured even without an explicit cue.
+          // Held briefly so a model capture can pre-empt it (no double-write).
+          const assumeGoal = coachAskedGoalRef.current;
+          coachAskedGoalRef.current = false; // only the direct answer counts
+          for (const goal of detectGoalsInTranscript(payload.transcript, assumeGoal)) {
             const tokens = goalTokens(goal.title);
             if (!tokens.size) continue;
             const sig = [...tokens].sort().join(" ");
@@ -307,6 +316,9 @@ export function AwardVoiceCoach({
           upsertMessage("coach", payload.item_id ?? `coach-${Date.now()}`, payload.delta);
         }
         if (payload.type === "response.output_audio_transcript.done") {
+          // Remember whether the coach just asked about goals, so the student's
+          // next answer is captured as a goal even without an explicit cue.
+          coachAskedGoalRef.current = isGoalPrompt(coachDraftRef.current);
           coachItemIdRef.current = null;
           coachDraftRef.current = "";
         }
