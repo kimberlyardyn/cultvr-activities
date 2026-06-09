@@ -478,7 +478,7 @@ export function AlmanacWorkspace({
           {tab === "discover" ? <DiscoverView /> : null}
           {tab === "goals" ? <GoalsView goals={goals} /> : null}
           {tab === "sessions" ? (
-            <GuidedSessionsView activities={activities} awards={awards} notes={notes} />
+            <GuidedSessionsView activities={activities} awards={awards} goals={goals} notes={notes} />
           ) : null}
           {tab === "action-plan" ? (
             <ActionPlanView

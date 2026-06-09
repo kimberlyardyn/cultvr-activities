@@ -40,6 +40,7 @@ const guidedSessionSchema = z.object({
   note_body: z.string().min(2).max(6000),
   activity_id: z.string().uuid().optional(),
   award_id: z.string().uuid().optional(),
+  goal_id: z.string().uuid().optional(),
 });
 
 const guidedPromptAnswerSchema = z.array(
@@ -296,6 +297,7 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
     note_body: value(formData, "note_body"),
     activity_id: value(formData, "activity_id") || undefined,
     award_id: value(formData, "award_id") || undefined,
+    goal_id: value(formData, "goal_id") || undefined,
   });
   const promptAnswers = parsePromptAnswers(parsed.prompt_answers);
   const answeredCount = promptAnswers.filter((item) => item.answer?.trim()).length;
@@ -329,6 +331,7 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
       prompt_count: promptAnswers.length,
       answered_count: answeredCount,
       note_id: noteResult.data.id,
+      goal_id: parsed.goal_id ?? null,
       completed_at: new Date().toISOString(),
     })
     .select("id")

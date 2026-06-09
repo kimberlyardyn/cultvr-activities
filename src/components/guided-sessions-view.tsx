@@ -18,7 +18,7 @@ import {
 } from "@/app/dashboard/actions";
 import { toast } from "@/components/toast";
 import { VoicePanel } from "@/components/voice-panel";
-import type { Activity, Award, Note } from "@/lib/types";
+import type { Activity, Award, Goal, Note } from "@/lib/types";
 
 // Each session has a single warm `opener` (the coach's first question) and at
 // most 2 sharply distinct `prompts` that surface as progressive-disclosure
@@ -43,6 +43,15 @@ const sessionTypes = [
       "When do you lose track of time? What are you usually doing?",
       "What's something you're proud of that you don't talk about much?",
     ],
+  },
+  {
+    id: "open-session",
+    label: "Open Session",
+    focus:
+      "Write freely about whatever's on your mind — no prompts, no AI. Saved straight to your notes.",
+    opener: "",
+    prompts: [],
+    freeform: true,
   },
   {
     id: "new-activity",
@@ -216,10 +225,12 @@ type ActionPlanWindowId = (typeof ACTION_PLAN_WINDOWS)[number]["id"];
 export function GuidedSessionsView({
   activities,
   awards,
+  goals,
   notes,
 }: {
   activities: Activity[];
   awards: Award[];
+  goals: Goal[];
   notes: Note[];
 }) {
   const [selectedId, setSelectedId] = useState<SessionId>(sessionTypes[0].id);
@@ -235,6 +246,7 @@ export function GuidedSessionsView({
   const [actionPlanWindow, setActionPlanWindow] = useState<ActionPlanWindowId | "none">("none");
   const [linkedActivityIds, setLinkedActivityIds] = useState<Set<string>>(new Set());
   const [linkedAwardIds, setLinkedAwardIds] = useState<Set<string>>(new Set());
+  const [linkedGoalIds, setLinkedGoalIds] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -282,6 +294,9 @@ export function GuidedSessionsView({
   }, [mode, saveState, transcript]);
 
   const selected = sessionTypes.find((item) => item.id === selectedId) ?? sessionTypes[0];
+  // Open Session: a free-write entry with no AI, no voice/text coach, no
+  // prompts — the student just writes and it's saved verbatim as a note.
+  const isFreeform = selected.id === "open-session";
   const sessionNotes = notes.filter((note) => note.category.startsWith("Guided:"));
   const answers: Record<string, string> = {};
   const generatedNoteTitle = `${selected.label}: ${shortDate(new Date().toISOString())}`;
@@ -386,7 +401,10 @@ export function GuidedSessionsView({
 
   function goToReview() {
     setDraftNoteTitle(buildSessionTitle());
-    setDraftNoteBody(buildSessionSummary(selected, answers, transcript));
+    // Open Session saves the student's writing verbatim — no AI summarization.
+    setDraftNoteBody(
+      isFreeform ? transcript.trim() : buildSessionSummary(selected, answers, transcript),
+    );
     setSaveState("idle");
     setSaveError(null);
     setMode("review");
@@ -457,12 +475,16 @@ export function GuidedSessionsView({
 
     const linkedActivities = activities.filter((a) => linkedActivityIds.has(a.id));
     const linkedAwards = awards.filter((a) => linkedAwardIds.has(a.id));
+    const linkedGoals = goals.filter((g) => linkedGoalIds.has(g.id));
     const linkLines: string[] = [];
     if (linkedActivities.length) {
       linkLines.push(`Linked activities: ${linkedActivities.map((a) => a.name).join(", ")}`);
     }
     if (linkedAwards.length) {
       linkLines.push(`Linked awards: ${linkedAwards.map((a) => a.name).join(", ")}`);
+    }
+    if (linkedGoals.length) {
+      linkLines.push(`Linked targets: ${linkedGoals.map((g) => g.title).join(", ")}`);
     }
     const finalBody = linkLines.length
       ? `${draftNoteBody}\n\n${linkLines.join("\n")}`
@@ -472,7 +494,10 @@ export function GuidedSessionsView({
     fd.set("session_type", selected.label);
     fd.set("session_label", selected.label);
     fd.set("session_focus", effectiveFocus);
-    fd.set("interaction_mode", interactionMode === "voice" ? "voice" : "chat");
+    fd.set(
+      "interaction_mode",
+      isFreeform ? "chat" : interactionMode === "voice" ? "voice" : "chat",
+    );
     fd.set("transcript", transcript);
     fd.set("note_title", draftNoteTitle);
     fd.set("note_body", finalBody);
@@ -489,6 +514,7 @@ export function GuidedSessionsView({
     );
     if (linkedActivities[0]) fd.set("activity_id", linkedActivities[0].id);
     if (linkedAwards[0]) fd.set("award_id", linkedAwards[0].id);
+    if (linkedGoals[0]) fd.set("goal_id", linkedGoals[0].id);
 
     setSaveState("saving");
     setSaveError(null);
@@ -523,6 +549,7 @@ export function GuidedSessionsView({
     setActionPlanWindow("none");
     setLinkedActivityIds(new Set());
     setLinkedAwardIds(new Set());
+    setLinkedGoalIds(new Set());
     setSaveState("idle");
     setSaveError(null);
     setDraftNoteTitle(`${nextSession.label}: ${shortDate(new Date().toISOString())}`);
@@ -596,9 +623,11 @@ export function GuidedSessionsView({
                 <p className="text-xs uppercase tracking-[0.16em] text-white/60">
                   {mode === "review"
                     ? "Save"
-                    : interactionMode === "voice"
-                      ? "Voice session"
-                      : "Text session"}
+                    : isFreeform
+                      ? "Open session"
+                      : interactionMode === "voice"
+                        ? "Voice session"
+                        : "Text session"}
                 </p>
                 <h2 className="mt-2 font-serif text-2xl leading-tight sm:text-3xl md:text-4xl">
                   {selected.label}
@@ -607,7 +636,7 @@ export function GuidedSessionsView({
                   {selected.focus}
                 </p>
               </div>
-              {mode === "live" ? (
+              {mode === "live" && !isFreeform ? (
                 <div className="relative inline-flex h-10 w-full max-w-[14rem] shrink-0 items-center self-start rounded-full border border-white/15 bg-white/5 p-1 text-sm font-medium xl:h-11 xl:w-36">
                   <span
                     className="absolute left-1 top-1 h-8 w-[calc(50%-0.25rem)] rounded-full bg-[color:var(--almanac-butter)] transition-transform duration-200 xl:h-9"
@@ -648,6 +677,15 @@ export function GuidedSessionsView({
 
           {mode === "live" ? (
             <div className="grid min-w-0 gap-5">
+              {isFreeform ? (
+                <FreeWriteSession
+                  onClear={clearChat}
+                  onChange={setTranscript}
+                  onReview={goToReview}
+                  value={transcript}
+                />
+              ) : (
+                <>
               {needsActivity ? (
                 <ActivityPicker
                   activities={activities}
@@ -688,6 +726,8 @@ export function GuidedSessionsView({
                   transcript={transcript}
                   value={typedEntry}
                 />
+              )}
+                </>
               )}
             </div>
           ) : null}
@@ -836,6 +876,27 @@ export function GuidedSessionsView({
                             key={a.id}
                             label={a.name}
                             onToggle={() => setLinkedAwardIds((prev) => toggleSet(prev, a.id))}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {goals.length ? (
+                    <div className="grid gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                        Add to existing target
+                      </span>
+                      <p className="text-[0.7rem] leading-5 text-[color:var(--almanac-ink-soft)]">
+                        Attach this session to a goal/target so it shows up there too.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {goals.map((g) => (
+                          <LinkChip
+                            active={linkedGoalIds.has(g.id)}
+                            key={g.id}
+                            label={g.title}
+                            onToggle={() => setLinkedGoalIds((prev) => toggleSet(prev, g.id))}
                           />
                         ))}
                       </div>
@@ -1033,6 +1094,59 @@ function ActivityPicker({
       ) : (
         <Empty label="No activities yet. Add one from Dashboard → Activities first, then come back to deepen it." />
       )}
+    </section>
+  );
+}
+
+/**
+ * Open Session — a plain free-write surface with no AI, no voice/text coach,
+ * and no prompts. The student just writes; the text is saved verbatim as a
+ * note. Bound directly to the parent's `transcript` so save/dirty checks work.
+ */
+function FreeWriteSession({
+  onChange,
+  onClear,
+  onReview,
+  value,
+}: {
+  onChange: (value: string) => void;
+  onClear: () => void;
+  onReview: () => void;
+  value: string;
+}) {
+  return (
+    <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
+      <SectionKicker>Open session</SectionKicker>
+      <h3 className="mt-2 font-serif text-2xl leading-tight">What&apos;s on your mind?</h3>
+      <p className="mt-1 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+        Write freely — no prompts, no AI. Whatever you put here is saved as a note.
+      </p>
+      <textarea
+        className="mt-4 min-h-[16rem] w-full resize-y rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 px-3.5 py-3 text-sm leading-7 outline-none focus:border-[color:var(--almanac-olive)]"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Start writing…"
+        value={value}
+      />
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          className="h-11 rounded-full bg-[color:var(--almanac-ink)] px-5 text-sm font-medium text-[color:var(--almanac-paper)] disabled:opacity-45"
+          disabled={!value.trim()}
+          onClick={onReview}
+          type="button"
+        >
+          Review &amp; save
+        </button>
+        <button
+          className="h-11 rounded-full border border-[color:var(--almanac-rule)] px-5 text-sm text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)] disabled:opacity-45"
+          disabled={!value.trim()}
+          onClick={() => {
+            if (!value.trim() || window.confirm("Clear this entry and start over?")) onClear();
+          }}
+          type="button"
+        >
+          Clear
+        </button>
+      </div>
     </section>
   );
 }
