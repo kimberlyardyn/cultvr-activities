@@ -214,13 +214,18 @@ type Session = (typeof sessionTypes)[number];
 type GuidedPanel = "live" | "history";
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
-const ACTION_PLAN_WINDOWS = [
-  { id: "weekly", label: "Weekly" },
-  { id: "monthly", label: "Monthly" },
-  { id: "1year", label: "1 Year" },
-  { id: "longterm", label: "Long-term" },
+// Destinations for the save form's "Add to action plan" picker. Each maps to a
+// plan window plus the section within it. Weekly/Monthly offer both the default
+// list and a "target" option (that window's Targets section).
+const ACTION_PLAN_DESTINATIONS = [
+  { id: "weekly", label: "Weekly", window: "weekly", section: "priority" },
+  { id: "weekly-target", label: "Weekly target", window: "weekly", section: "targets" },
+  { id: "monthly", label: "Monthly", window: "monthly", section: "priority" },
+  { id: "monthly-target", label: "Monthly target", window: "monthly", section: "targets" },
+  { id: "1year", label: "1 Year", window: "1year", section: "reaches" },
+  { id: "longterm", label: "Long-term", window: "longterm", section: "reaches" },
 ] as const;
-type ActionPlanWindowId = (typeof ACTION_PLAN_WINDOWS)[number]["id"];
+type ActionPlanDestId = (typeof ACTION_PLAN_DESTINATIONS)[number]["id"];
 
 export function GuidedSessionsView({
   activities,
@@ -243,7 +248,7 @@ export function GuidedSessionsView({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSuggestions, setChatSuggestions] = useState<string[]>([]);
-  const [actionPlanWindow, setActionPlanWindow] = useState<ActionPlanWindowId | "none">("none");
+  const [actionPlanDest, setActionPlanDest] = useState<ActionPlanDestId | "none">("none");
   const [linkedActivityIds, setLinkedActivityIds] = useState<Set<string>>(new Set());
   const [linkedAwardIds, setLinkedAwardIds] = useState<Set<string>>(new Set());
   const [linkedGoalIds, setLinkedGoalIds] = useState<Set<string>>(new Set());
@@ -520,8 +525,9 @@ export function GuidedSessionsView({
     setSaveError(null);
     try {
       await createGuidedSessionArtifacts(fd);
-      if (actionPlanWindow !== "none") {
-        addSessionToActionPlan(actionPlanWindow, draftNoteTitle);
+      if (actionPlanDest !== "none") {
+        const dest = ACTION_PLAN_DESTINATIONS.find((d) => d.id === actionPlanDest);
+        if (dest) addSessionToActionPlan(dest.window, dest.section, draftNoteTitle);
       }
       setSaveState("saved");
       toast.success("Session saved.");
@@ -546,7 +552,7 @@ export function GuidedSessionsView({
     setChatMessages([]);
     setChatLoading(false);
     setChatSuggestions([]);
-    setActionPlanWindow("none");
+    setActionPlanDest("none");
     setLinkedActivityIds(new Set());
     setLinkedAwardIds(new Set());
     setLinkedGoalIds(new Set());
@@ -739,9 +745,9 @@ export function GuidedSessionsView({
                 <h2 className="mt-2 font-serif text-3xl leading-tight">Session saved</h2>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
                   &ldquo;{draftNoteTitle}&rdquo; was saved to your sessions
-                  {actionPlanWindow !== "none"
+                  {actionPlanDest !== "none"
                     ? ` and added to your ${
-                        ACTION_PLAN_WINDOWS.find((w) => w.id === actionPlanWindow)?.label
+                        ACTION_PLAN_DESTINATIONS.find((d) => d.id === actionPlanDest)?.label
                       } action plan`
                     : ""}
                   .
@@ -827,14 +833,14 @@ export function GuidedSessionsView({
                     <select
                       className="h-11 rounded-lg border border-[color:var(--almanac-rule)] bg-white/60 px-3 text-sm outline-none focus:border-[color:var(--almanac-olive)]"
                       onChange={(event) =>
-                        setActionPlanWindow(event.target.value as ActionPlanWindowId | "none")
+                        setActionPlanDest(event.target.value as ActionPlanDestId | "none")
                       }
-                      value={actionPlanWindow}
+                      value={actionPlanDest}
                     >
                       <option value="none">Don&apos;t add</option>
-                      {ACTION_PLAN_WINDOWS.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.label}
+                      {ACTION_PLAN_DESTINATIONS.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.label}
                         </option>
                       ))}
                     </select>
@@ -1508,10 +1514,10 @@ function toggleSet(prev: Set<string>, id: string): Set<string> {
 
 /**
  * Append a session as an item into the Action Plan's localStorage so it appears
- * immediately in the chosen window. Mirrors the structure used by ActionPlanView
- * in almanac-workspace.tsx (storage key `cultvr-action-plan-v3`).
+ * immediately in the chosen window/section. Mirrors the structure used by
+ * ActionPlanView in almanac-workspace.tsx (storage key `cultvr-action-plan-v3`).
  */
-function addSessionToActionPlan(windowId: ActionPlanWindowId, text: string) {
+function addSessionToActionPlan(windowId: string, section: string, text: string) {
   if (typeof window === "undefined") return;
   const STORAGE_KEY = "cultvr-action-plan-v3";
   type Item = { id: string; text: string; done: boolean };
@@ -1528,7 +1534,6 @@ function addSessionToActionPlan(windowId: ActionPlanWindowId, text: string) {
   if (!store[windowId]) {
     store[windowId] = { priority: [], secondary: [], reaches: [], targets: [] };
   }
-  const section = windowId === "1year" || windowId === "longterm" ? "reaches" : "priority";
   if (!Array.isArray(store[windowId][section])) store[windowId][section] = [];
 
   store[windowId][section].push({
