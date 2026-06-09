@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  ArrowDown,
-  ArrowUp,
   ChevronDown,
   FileText,
   Mic,
@@ -39,7 +37,12 @@ import {
 } from "@/app/dashboard/actions";
 import { LinkedGoals } from "@/components/linked-goals";
 import { AssociatedWorkSection } from "@/components/associated-work-section";
-import { BulkExportModal, ExportPreview, ResumeImportModal } from "@/components/activities-tab";
+import {
+  BulkExportModal,
+  ExportPreview,
+  ReorderGutter,
+  ResumeImportModal,
+} from "@/components/activities-tab";
 import { toast } from "@/components/toast";
 import { buildAwardRecordText, collectAssociatedWork } from "@/lib/associated-record";
 import {
@@ -202,6 +205,26 @@ export function AwardsTab({
     });
   }, []);
 
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  const moveItem = useCallback(
+    (from: number, to: number) => {
+      if (from === to || from < 0 || to < 0 || from >= awards.length || to >= awards.length) {
+        return;
+      }
+      const reordered = [...awards];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      const fd = new FormData();
+      fd.set("order", JSON.stringify(reordered.map((a) => a.id)));
+      startTransition(() => {
+        void reorderAwards(fd);
+      });
+    },
+    [awards],
+  );
+
   const handleReorder = useCallback(
     (index: number, direction: -1 | 1) => {
       const target = index + direction;
@@ -221,14 +244,11 @@ export function AwardsTab({
     <div className="grid gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-[color:var(--almanac-ink-soft)]">
-            Awards
-          </p>
-          <h2 className="mt-2 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)] md:text-4xl">
+          <h2 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)] md:text-3xl">
             Honors & recognitions
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-            Track academic honors, competition placements, scholarships, and any recognition that strengthens an application. Optionally link each award to the activity it came from.
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+            Honors, placements, and scholarships — optionally linked to the activity they came from.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -307,6 +327,20 @@ export function AwardsTab({
               onDelete={() => handleDelete(a.id)}
               onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
               onMoveDown={idx < awards.length - 1 ? () => handleReorder(idx, 1) : undefined}
+              index={idx}
+              dragIndex={dragIndex}
+              overIndex={overIndex}
+              onDragStartItem={setDragIndex}
+              onDragOverItem={setOverIndex}
+              onDropItem={(to) => {
+                if (dragIndex !== null) moveItem(dragIndex, to);
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              onDragEndItem={() => {
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
             />
           ))}
         </div>
@@ -358,6 +392,13 @@ function AwardCard({
   onMoveDown,
   isSample = false,
   rank,
+  index,
+  dragIndex = null,
+  overIndex = null,
+  onDragStartItem,
+  onDragOverItem,
+  onDropItem,
+  onDragEndItem,
 }: {
   award: Award;
   activities: Activity[];
@@ -368,23 +409,61 @@ function AwardCard({
   onMoveDown?: () => void;
   isSample?: boolean;
   rank?: number;
+  index?: number;
+  dragIndex?: number | null;
+  overIndex?: number | null;
+  onDragStartItem?: (index: number) => void;
+  onDragOverItem?: (index: number) => void;
+  onDropItem?: (index: number) => void;
+  onDragEndItem?: () => void;
 }) {
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
   // Collapsed by default so the dashboard stays scannable — just the title,
   // with details/tags/goals behind a click. Samples start open as previews.
   const [expanded, setExpanded] = useState(isSample);
+  const [grabbing, setGrabbing] = useState(false);
+  const canDrag = !isSample && index !== undefined && Boolean(onDropItem);
+  const isDragging = canDrag && dragIndex === index;
+  const isOver = canDrag && overIndex === index && dragIndex !== null && dragIndex !== index;
 
   return (
     <article
       className={[
-        "flex gap-4 rounded-2xl border p-5 transition",
+        "flex gap-3 rounded-2xl border p-4 transition",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
-          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
+          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
+        isDragging ? "opacity-50" : "",
+        isOver ? "ring-2 ring-[color:var(--almanac-olive)]" : "",
       ].join(" ")}
+      draggable={canDrag && grabbing}
+      onDragEnd={() => {
+        setGrabbing(false);
+        onDragEndItem?.();
+      }}
+      onDragOver={(event) => {
+        if (!canDrag || dragIndex === null) return;
+        event.preventDefault();
+        if (index !== undefined) onDragOverItem?.(index);
+      }}
+      onDragStart={(event) => {
+        if (index === undefined) return;
+        event.dataTransfer.effectAllowed = "move";
+        onDragStartItem?.(index);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setGrabbing(false);
+        if (index !== undefined) onDropItem?.(index);
+      }}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
-        <RankPillar rank={rank} onMoveUp={onMoveUp} onMoveDown={onMoveDown} />
+        <ReorderGutter
+          onGrab={setGrabbing}
+          onMoveDown={onMoveDown}
+          onMoveUp={onMoveUp}
+          rank={rank}
+        />
       )}
 
       <div className="min-w-0 flex-1">
@@ -400,9 +479,9 @@ function AwardCard({
               className={`shrink-0 text-[color:var(--almanac-ink-soft)] transition-transform ${
                 expanded ? "" : "-rotate-90"
               }`}
-              size={18}
+              size={16}
             />
-            <h3 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)]">
+            <h3 className="font-serif text-xl leading-tight text-[color:var(--almanac-ink)]">
               {award.name || "Untitled award"}
             </h3>
             {isSample && (
@@ -492,42 +571,6 @@ function AwardCard({
       )}
       </div>
     </article>
-  );
-}
-
-function RankPillar({
-  rank,
-  onMoveUp,
-  onMoveDown,
-}: {
-  rank: number;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-}) {
-  return (
-    <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
-      <button
-        className="flex size-7 items-center justify-center rounded-full text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:bg-transparent"
-        disabled={!onMoveUp}
-        onClick={onMoveUp}
-        title="Move up"
-        type="button"
-      >
-        <ArrowUp size={16} strokeWidth={2.4} />
-      </button>
-      <div className="flex size-9 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-white/60 font-mono text-xs font-semibold text-[color:var(--almanac-ink)]">
-        #{rank}
-      </div>
-      <button
-        className="flex size-7 items-center justify-center rounded-full text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:bg-transparent"
-        disabled={!onMoveDown}
-        onClick={onMoveDown}
-        title="Move down"
-        type="button"
-      >
-        <ArrowDown size={16} strokeWidth={2.4} />
-      </button>
-    </div>
   );
 }
 

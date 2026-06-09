@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   FileText,
+  GripVertical,
   Mic,
   Pencil,
   Plus,
@@ -276,6 +277,28 @@ export function ActivitiesTab({
     });
   }, []);
 
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  // Persist a new order. `moveItem` handles drag-and-drop (any position);
+  // `handleReorder` is the ±1 nudge used by the up/down buttons.
+  const moveItem = useCallback(
+    (from: number, to: number) => {
+      if (from === to || from < 0 || to < 0 || from >= activities.length || to >= activities.length) {
+        return;
+      }
+      const reordered = [...activities];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      const fd = new FormData();
+      fd.set("order", JSON.stringify(reordered.map((a) => a.id)));
+      startTransition(() => {
+        void reorderActivities(fd);
+      });
+    },
+    [activities],
+  );
+
   const handleReorder = useCallback(
     (index: number, direction: -1 | 1) => {
       const target = index + direction;
@@ -325,14 +348,11 @@ export function ActivitiesTab({
     <div className="grid gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-[color:var(--almanac-ink-soft)]">
-            Activities
-          </p>
-          <h2 className="mt-2 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)] md:text-4xl">
+          <h2 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)] md:text-3xl">
             Your activities & experiences
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-            Build a complete record once — leadership, service, work, art, athletics, research, family responsibilities. Then export it as a Common App entry, UC entry, or resume line.
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+            Build the record once, then export it as a Common App, UC, or resume line.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -411,6 +431,20 @@ export function ActivitiesTab({
               allNotes={notes}
               onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
               onMoveDown={idx < activities.length - 1 ? () => handleReorder(idx, 1) : undefined}
+              index={idx}
+              dragIndex={dragIndex}
+              overIndex={overIndex}
+              onDragStartItem={setDragIndex}
+              onDragOverItem={setOverIndex}
+              onDropItem={(to) => {
+                if (dragIndex !== null) moveItem(dragIndex, to);
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              onDragEndItem={() => {
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
             />
           ))}
         </div>
@@ -462,6 +496,13 @@ function ActivityCard({
   onMoveUp,
   onMoveDown,
   rank,
+  index,
+  dragIndex = null,
+  overIndex = null,
+  onDragStartItem,
+  onDragOverItem,
+  onDropItem,
+  onDragEndItem,
 }: {
   activity: Activity;
   notes: Note[];
@@ -473,8 +514,19 @@ function ActivityCard({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   rank?: number;
+  index?: number;
+  dragIndex?: number | null;
+  overIndex?: number | null;
+  onDragStartItem?: (index: number) => void;
+  onDragOverItem?: (index: number) => void;
+  onDropItem?: (index: number) => void;
+  onDragEndItem?: () => void;
 }) {
   const [showTagging, setShowTagging] = useState(false);
+  const [grabbing, setGrabbing] = useState(false);
+  const canDrag = !isSample && index !== undefined && Boolean(onDropItem);
+  const isDragging = canDrag && dragIndex === index;
+  const isOver = canDrag && overIndex === index && dragIndex !== null && dragIndex !== index;
   // Collapsed by default so the dashboard stays scannable — name + position
   // only, with the rest (description, dates, tags, goals…) behind a click.
   // Sample cards start open so the template preview is visible.
@@ -490,14 +542,41 @@ function ActivityCard({
   return (
     <article
       className={[
-        "flex gap-4 rounded-2xl border p-5 transition",
+        "flex gap-3 rounded-2xl border p-4 transition",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
-          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
+          : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
+        isDragging ? "opacity-50" : "",
+        isOver ? "ring-2 ring-[color:var(--almanac-olive)]" : "",
       ].join(" ")}
+      draggable={canDrag && grabbing}
+      onDragEnd={() => {
+        setGrabbing(false);
+        onDragEndItem?.();
+      }}
+      onDragOver={(event) => {
+        if (!canDrag || dragIndex === null) return;
+        event.preventDefault();
+        if (index !== undefined) onDragOverItem?.(index);
+      }}
+      onDragStart={(event) => {
+        if (index === undefined) return;
+        event.dataTransfer.effectAllowed = "move";
+        onDragStartItem?.(index);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setGrabbing(false);
+        if (index !== undefined) onDropItem?.(index);
+      }}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
-        <RankPillar rank={rank} onMoveUp={onMoveUp} onMoveDown={onMoveDown} />
+        <ReorderGutter
+          onGrab={setGrabbing}
+          onMoveDown={onMoveDown}
+          onMoveUp={onMoveUp}
+          rank={rank}
+        />
       )}
 
       <div className="min-w-0 flex-1">
@@ -513,9 +592,9 @@ function ActivityCard({
               className={`shrink-0 text-[color:var(--almanac-ink-soft)] transition-transform ${
                 expanded ? "" : "-rotate-90"
               }`}
-              size={18}
+              size={16}
             />
-            <h3 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)]">
+            <h3 className="font-serif text-xl leading-tight text-[color:var(--almanac-ink)]">
               {activity.name || "Untitled activity"}
             </h3>
             {isSample && (
@@ -524,9 +603,16 @@ function ActivityCard({
               </span>
             )}
           </div>
-          <p className="mt-1 pl-[26px] text-sm text-[color:var(--almanac-ink-soft)]">
+          <p className="mt-0.5 pl-[24px] text-sm text-[color:var(--almanac-ink-soft)]">
             {[activity.position, activity.category].filter(Boolean).join(" · ") || "—"}
           </p>
+          {/* Collapsed: surface a couple of key facts so the list is scannable
+              without expanding every card. */}
+          {!expanded && (dateRange || time) && (
+            <p className="mt-0.5 pl-[24px] text-xs text-[color:var(--almanac-ink-soft)]">
+              {[dateRange, time].filter(Boolean).join("  ·  ")}
+            </p>
+          )}
         </button>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -640,37 +726,56 @@ function startDeepenSession(activityId: string) {
   );
 }
 
-function RankPillar({
+/**
+ * Compact reorder gutter: a drag handle (grab to drag the whole card) with the
+ * rank shown as a small badge, plus dimmed up/down nudges as a keyboard/touch
+ * fallback (native drag doesn't fire on touch). `onGrab` flips the parent card's
+ * `draggable` on while the handle is pressed, so only the handle initiates drag.
+ */
+export function ReorderGutter({
   rank,
   onMoveUp,
   onMoveDown,
+  onGrab,
 }: {
   rank: number;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onGrab: (grabbing: boolean) => void;
 }) {
   return (
-    <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
+    <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
       <button
-        className="flex size-7 items-center justify-center rounded-full text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:bg-transparent"
+        aria-label={`Drag to reorder, currently #${rank}`}
+        className="cursor-grab touch-none rounded-md p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] active:cursor-grabbing"
+        onPointerDown={() => onGrab(true)}
+        onPointerCancel={() => onGrab(false)}
+        onPointerUp={() => onGrab(false)}
+        title="Drag to reorder"
+        type="button"
+      >
+        <GripVertical size={15} />
+      </button>
+      <span className="font-mono text-[0.62rem] font-semibold text-[color:var(--almanac-ink-soft)]">
+        #{rank}
+      </span>
+      <button
+        className="flex size-6 items-center justify-center rounded-md text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:opacity-20 disabled:hover:bg-transparent"
         disabled={!onMoveUp}
         onClick={onMoveUp}
         title="Move up"
         type="button"
       >
-        <ArrowUp size={16} strokeWidth={2.4} />
+        <ArrowUp size={13} strokeWidth={2.4} />
       </button>
-      <div className="flex size-9 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-white/60 font-mono text-xs font-semibold text-[color:var(--almanac-ink)]">
-        #{rank}
-      </div>
       <button
-        className="flex size-7 items-center justify-center rounded-full text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:bg-transparent"
+        className="flex size-6 items-center justify-center rounded-md text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:opacity-20 disabled:hover:bg-transparent"
         disabled={!onMoveDown}
         onClick={onMoveDown}
         title="Move down"
         type="button"
       >
-        <ArrowDown size={16} strokeWidth={2.4} />
+        <ArrowDown size={13} strokeWidth={2.4} />
       </button>
     </div>
   );

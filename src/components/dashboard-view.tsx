@@ -804,9 +804,9 @@ function PageHeader({
   title: ReactNode;
 }) {
   return (
-    <header className="border-b border-[color:var(--almanac-rule)] px-5 py-6 md:px-9 md:py-8">
+    <header className="border-b border-[color:var(--almanac-rule)] px-5 py-4 md:px-9 md:py-5">
       <div className="max-w-5xl">
-        <h1 className="font-serif text-4xl leading-[1.02] text-[color:var(--almanac-ink)] md:text-5xl">
+        <h1 className="font-serif text-3xl leading-[1.02] text-[color:var(--almanac-ink)] md:text-4xl">
           {title}
         </h1>
       </div>
