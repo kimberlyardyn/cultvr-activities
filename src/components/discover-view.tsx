@@ -234,11 +234,11 @@ const TABS: TabDef[] = [
   },
 
   // -----------------------------------------------------------------------
-  // 7) Counseling — career coaching + private admissions partners.
+  // 7) Coaching — career coaching + private admissions partners.
   // -----------------------------------------------------------------------
   {
     id: "counseling",
-    label: "Counseling",
+    label: "Coaching",
     icon: Users,
     color: "#c4697a",
     blurb:
@@ -285,7 +285,7 @@ export function DiscoverView() {
           <em className="italic text-[color:var(--almanac-sage,#7a9e7a)]">Discover</em>
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-          A hand-picked map of where to apply, research, fund, and explore. Every card opens directly to the source — no detours.
+          Discover where to apply, explore new careers and directions, and receive personalized mentorship. Every card opens directly to the source — no detours.
         </p>
       </header>
 
