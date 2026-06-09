@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Mic, Pencil, Square, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -679,6 +679,12 @@ export function GuidedSessionsView({
             <div className="grid min-w-0 gap-5">
               {isFreeform ? (
                 <FreeWriteSession
+                  onAppend={(text) =>
+                    setTranscript((cur) => {
+                      const sep = cur && !/\s$/.test(cur) ? " " : "";
+                      return `${cur}${sep}${text}`;
+                    })
+                  }
                   onClear={clearChat}
                   onChange={setTranscript}
                   onReview={goToReview}
@@ -1099,38 +1105,157 @@ function ActivityPicker({
 }
 
 /**
- * Open Session — a plain free-write surface with no AI, no voice/text coach,
- * and no prompts. The student just writes; the text is saved verbatim as a
- * note. Bound directly to the parent's `transcript` so save/dirty checks work.
+ * Open Session — a plain free-write surface with no AI coach, no prompts. The
+ * student writes (or dictates) and the text is saved verbatim as a note. Voice
+ * notes are recorded and transcribed (plain speech-to-text via /api/transcribe)
+ * then appended to the text; there's no conversation or coaching.
+ * Bound to the parent's `transcript` so save/dirty checks work.
  */
 function FreeWriteSession({
+  onAppend,
   onChange,
   onClear,
   onReview,
   value,
 }: {
+  onAppend: (text: string) => void;
   onChange: (value: string) => void;
   onClear: () => void;
   onReview: () => void;
   value: string;
 }) {
+  const [recState, setRecState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Make sure the mic is released if the user navigates away mid-recording.
+  useEffect(() => {
+    return () => {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  async function startRecording() {
+    if (typeof MediaRecorder === "undefined") {
+      toast.error("Voice recording isn't supported in this browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => void transcribeRecording(recorder.mimeType);
+      recorder.start();
+      recorderRef.current = recorder;
+      setRecState("recording");
+    } catch {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      toast.error("Microphone access is needed to record a voice note.");
+      setRecState("idle");
+    }
+  }
+
+  function stopRecording() {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    recorderRef.current = null;
+  }
+
+  async function transcribeRecording(mimeType: string) {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    const type = mimeType || "audio/webm";
+    const blob = new Blob(chunksRef.current, { type });
+    chunksRef.current = [];
+    if (!blob.size) {
+      setRecState("idle");
+      return;
+    }
+    setRecState("transcribing");
+    try {
+      const ext = type.includes("mp4")
+        ? "mp4"
+        : type.includes("ogg")
+          ? "ogg"
+          : type.includes("wav")
+            ? "wav"
+            : "webm";
+      const fd = new FormData();
+      fd.append("audio", blob, `voice-note.${ext}`);
+      const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+      const data = (await res.json()) as { text?: string; error?: string };
+      const text = (data.text ?? "").trim();
+      if (!res.ok || !text) throw new Error(data.error || "Couldn't transcribe that — try again.");
+      onAppend(text);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't transcribe that.");
+    } finally {
+      setRecState("idle");
+    }
+  }
+
+  const recording = recState === "recording";
+  const transcribing = recState === "transcribing";
+  const busy = recording || transcribing;
+
   return (
     <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
       <SectionKicker>Open session</SectionKicker>
       <h3 className="mt-2 font-serif text-2xl leading-tight">What&apos;s on your mind?</h3>
       <p className="mt-1 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-        Write freely — no prompts, no AI. Whatever you put here is saved as a note.
+        Write freely or record a voice note — no prompts, no coaching. Whatever you put here is
+        saved as a note.
       </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          className={[
+            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50",
+            recording
+              ? "bg-[#b0453b] text-white hover:opacity-90"
+              : "bg-[#2f5d46] text-white hover:opacity-90",
+          ].join(" ")}
+          disabled={transcribing}
+          onClick={recording ? stopRecording : startRecording}
+          type="button"
+        >
+          {recording ? (
+            <Square size={14} />
+          ) : transcribing ? (
+            <Loader2 className="animate-spin" size={14} />
+          ) : (
+            <Mic size={14} />
+          )}
+          {recording ? "Stop & transcribe" : transcribing ? "Transcribing…" : "Record voice note"}
+        </button>
+        {recording ? (
+          <span className="text-xs text-[color:var(--almanac-ink-soft)]">
+            Listening — speak your note, then stop.
+          </span>
+        ) : null}
+      </div>
+
       <textarea
         className="mt-4 min-h-[16rem] w-full resize-y rounded-xl border border-[color:var(--almanac-rule)] bg-white/60 px-3.5 py-3 text-sm leading-7 outline-none focus:border-[color:var(--almanac-olive)]"
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Start writing…"
+        placeholder="Start writing, or record a voice note above…"
         value={value}
       />
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           className="h-11 rounded-full bg-[color:var(--almanac-ink)] px-5 text-sm font-medium text-[color:var(--almanac-paper)] disabled:opacity-45"
-          disabled={!value.trim()}
+          disabled={!value.trim() || busy}
           onClick={onReview}
           type="button"
         >
@@ -1138,7 +1263,7 @@ function FreeWriteSession({
         </button>
         <button
           className="h-11 rounded-full border border-[color:var(--almanac-rule)] px-5 text-sm text-[color:var(--almanac-ink-soft)] transition hover:text-[color:var(--almanac-ink)] disabled:opacity-45"
-          disabled={!value.trim()}
+          disabled={!value.trim() || busy}
           onClick={() => {
             if (!value.trim() || window.confirm("Clear this entry and start over?")) onClear();
           }}
