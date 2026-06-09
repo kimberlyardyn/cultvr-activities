@@ -332,6 +332,9 @@ function AwardCard({
   rank?: number;
 }) {
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
+  // Collapsed by default so the dashboard stays scannable — just the title,
+  // with details/tags/goals behind a click. Samples start open as previews.
+  const [expanded, setExpanded] = useState(isSample);
 
   return (
     <article
@@ -348,8 +351,19 @@ function AwardCard({
 
       <div className="min-w-0 flex-1">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <button
+          aria-expanded={expanded}
+          className="group min-w-0 flex-1 text-left"
+          onClick={() => setExpanded((v) => !v)}
+          type="button"
+        >
           <div className="flex flex-wrap items-center gap-2">
+            <ChevronDown
+              className={`shrink-0 text-[color:var(--almanac-ink-soft)] transition-transform ${
+                expanded ? "" : "-rotate-90"
+              }`}
+              size={18}
+            />
             <h3 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)]">
               {award.name || "Untitled award"}
             </h3>
@@ -364,10 +378,12 @@ function AwardCard({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-[color:var(--almanac-ink-soft)]">
-            {[award.organization, award.year].filter(Boolean).join(" · ") || "—"}
-          </p>
-        </div>
+          {expanded && (
+            <p className="mt-1 pl-[26px] text-sm text-[color:var(--almanac-ink-soft)]">
+              {[award.organization, award.year].filter(Boolean).join(" · ") || "—"}
+            </p>
+          )}
+        </button>
         <div className="flex shrink-0 items-center gap-1">
           <button
             className="rounded-full p-2 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
@@ -390,6 +406,8 @@ function AwardCard({
         </div>
       </header>
 
+      {expanded && (
+       <>
       {award.scope && (
         <p className="mt-2 text-xs italic text-[color:var(--almanac-ink-soft)]">{award.scope}</p>
       )}
@@ -432,6 +450,8 @@ function AwardCard({
         goals={goals}
         readonly={isSample}
       />
+       </>
+      )}
       </div>
     </article>
   );

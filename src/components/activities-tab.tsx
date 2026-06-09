@@ -474,6 +474,10 @@ function ActivityCard({
   rank?: number;
 }) {
   const [showTagging, setShowTagging] = useState(false);
+  // Collapsed by default so the dashboard stays scannable — name + position
+  // only, with the rest (description, dates, tags, goals…) behind a click.
+  // Sample cards start open so the template preview is visible.
+  const [expanded, setExpanded] = useState(isSample);
   const start = activity.start_date ?? "";
   const end = activity.in_progress ? "Present" : activity.end_date ?? "";
   const dateRange = start || end ? `${start || "—"} → ${end || "—"}` : null;
@@ -497,8 +501,19 @@ function ActivityCard({
 
       <div className="min-w-0 flex-1">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <button
+          aria-expanded={expanded}
+          className="group min-w-0 flex-1 text-left"
+          onClick={() => setExpanded((v) => !v)}
+          type="button"
+        >
           <div className="flex flex-wrap items-center gap-2">
+            <ChevronDown
+              className={`shrink-0 text-[color:var(--almanac-ink-soft)] transition-transform ${
+                expanded ? "" : "-rotate-90"
+              }`}
+              size={18}
+            />
             <h3 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)]">
               {activity.name || "Untitled activity"}
             </h3>
@@ -508,10 +523,10 @@ function ActivityCard({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-[color:var(--almanac-ink-soft)]">
+          <p className="mt-1 pl-[26px] text-sm text-[color:var(--almanac-ink-soft)]">
             {[activity.position, activity.category].filter(Boolean).join(" · ") || "—"}
           </p>
-        </div>
+        </button>
         <div className="flex shrink-0 items-center gap-1">
           <button
             className="rounded-full p-2 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
@@ -534,6 +549,8 @@ function ActivityCard({
         </div>
       </header>
 
+      {expanded && (
+       <>
       {activity.organization_description && (
         <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs italic leading-5 text-[color:var(--almanac-ink-soft)]">
           <span className="font-semibold uppercase not-italic tracking-[0.12em]">About:</span>{" "}
@@ -596,6 +613,8 @@ function ActivityCard({
             Deepen this activity →
           </button>
         </p>
+      )}
+       </>
       )}
       </div>
     </article>
