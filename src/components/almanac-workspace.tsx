@@ -1362,8 +1362,8 @@ type SectionDef = (typeof SECTION_DEFS)[PlanSectionId];
 
 // Which sections render in each window's layout, in order.
 const SECTIONS_BY_WINDOW: Record<PlanWindowId, PlanSectionId[]> = {
-  weekly: ["priority", "secondary", "targets"],
-  monthly: ["priority", "secondary", "targets"],
+  weekly: ["priority", "secondary"],
+  monthly: ["priority", "secondary"],
   "1year": ["reaches", "targets"],
   longterm: ["reaches", "targets"],
 };
