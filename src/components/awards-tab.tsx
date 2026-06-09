@@ -647,6 +647,8 @@ function AwardEditor({
             autoStart={voiceFirst}
             onUpdate={handleVoiceUpdate}
             currentDraftSummary={draftSummary}
+            mode={isNew ? "add" : "edit"}
+            awardName={draft.name}
           />
 
           <Field label="Award name">

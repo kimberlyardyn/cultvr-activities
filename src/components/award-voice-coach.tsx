@@ -3,6 +3,13 @@
 import { Loader2, Mic, PhoneOff, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  buildVoiceModeInstructions,
+  detectGoalsInTranscript,
+  goalsSimilar,
+  goalTokens,
+} from "@/lib/voice-coach";
+
 export type AwardVoiceUpdate = {
   name?: string;
   organization?: string;
@@ -22,11 +29,16 @@ type Props = {
   onUpdate: (update: AwardVoiceUpdate) => void;
   currentDraftSummary?: string;
   autoStart?: boolean;
+  /** "add" for a new award (default), "edit" when refining an existing one. */
+  mode?: "add" | "edit";
+  /** Name of the award being edited — used in the edit-mode opening line. */
+  awardName?: string;
 };
 
 const COACH_INSTRUCTIONS = [
   "You are Cultvr's awards intake coach. Help a high school student capture one award, honor, or recognition for college applications.",
   "Conduct a natural, FRIENDLY conversation — do NOT read fields as a checklist. Keep spoken responses SHORT (one or two sentences). Listen more than you speak. Ask ONE question at a time.",
+  "CRITICAL — GOALS & TARGETS ARE A FORM FIELD YOU MUST FILL IN, NOT HOMEWORK FOR THE STUDENT: The MOMENT the student mentions ANY goal, target, plan, or next step tied to this award — at ANY point, not only at the end — you MUST immediately call `update_fields` with the `goals` array (send the FULL list every time). A goal is something they want to ACHIEVE (e.g. 'advance from Commended to Finalist', 'place first next year') — capture it in the `goals` array, NOT as a tag. NEVER say you'll add it later, NEVER tell the student to type it in themselves, and NEVER drop it. After the tool call, confirm OUT LOUD that you wrote it down — e.g. 'Got it — I've added that goal to the form.'",
   "Walk through the award SECTION BY SECTION:",
   "1) AWARD NAME — what's it called?",
   "2) ISSUING ORGANIZATION — who gave it?",
@@ -36,7 +48,7 @@ const COACH_INSTRUCTIONS = [
   "6) REQUIREMENTS — ASK: 'What was needed to earn this? Test score, application, judging rounds?' (Fill requirements field if shared.)",
   "7) DESCRIPTION — gather rich narrative context.",
   "8) TAGS — suggest a few (STEM, Humanities, Academic, Service, Creativity, Leadership, Passion Project) and confirm.",
-  "9) GOALS — ASK: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' For EACH goal they share, call `update_fields` with the `goals` array — a short title plus an optional target_date in YYYY-MM format. If the timeframe is vague (e.g. 'spring', 'next year'), pin it down by proposing a specific month and asking them to confirm — e.g. 'Let's make that more specific — can I put April instead of spring?' — and use the month they agree to. Send the FULL list of goals each time. These save automatically with the award, so confirm them out loud instead of telling them to add it manually later.",
+  "9) GOALS — if the student hasn't already brought up a goal earlier (capture those the instant they come up — see the CRITICAL goals rule above), ASK near the end: 'Is there a next-step goal tied to this — advance from Commended to Finalist, place higher next year? Any timeline?' For EACH goal they share, call `update_fields` with the `goals` array — a short title plus an optional target_date in YYYY-MM format. If the timeframe is vague (e.g. 'spring', 'next year'), pin it down by proposing a specific month and asking them to confirm — e.g. 'Let's make that more specific — can I put April instead of spring?' — and use the month they agree to. Send the FULL list of goals each time. These save automatically with the award, so confirm them out loud instead of telling them to add it manually later.",
   "",
   "CRITICAL — DESCRIPTION VOICE & STYLE:",
   "The description ends up on the student's RESUME and college applications. Write it in CONCISE FIRST-PERSON RESUME PROSE.",
@@ -50,14 +62,14 @@ const COACH_INSTRUCTIONS = [
   "",
   "As you learn details, call the `update_fields` tool to fill the form. Call it AS OFTEN AS YOU LEARN something new — overwrite description with the improved polished version as the conversation progresses.",
   "",
-  "Start by warmly asking what award they want to add. When done, give a brief verbal summary and let them know everything — including any goals — has been added to the form to review or refine before saving.",
+  "When done, give a brief verbal summary and let them know everything — including any goals — has been added to the form to review or refine before saving.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
   type: "function",
   name: "update_fields",
   description:
-    "Update one or more fields on the award form. Call this whenever you learn new information from the student.",
+    "Update one or more fields on the award form — including GOALS / TARGETS. Call this whenever you learn new information from the student, and ALWAYS the moment they mention a goal or target (pass the full goals array). Do not defer goals to the end or tell the student to add them manually.",
   parameters: {
     type: "object",
     properties: {
@@ -105,7 +117,13 @@ const UPDATE_FIELDS_TOOL = {
   },
 };
 
-export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = false }: Props) {
+export function AwardVoiceCoach({
+  onUpdate,
+  currentDraftSummary,
+  autoStart = false,
+  mode = "add",
+  awardName,
+}: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +134,9 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
   const coachItemIdRef = useRef<string | null>(null);
   const studentDraftRef = useRef("");
   const coachDraftRef = useRef("");
+  // Goal backstop bookkeeping (see src/lib/voice-coach.ts).
+  const seenGoalTokensRef = useRef<Set<string>[]>([]);
+  const goalTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const cleanup = useCallback((resetStatus = true) => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -127,6 +148,9 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
     coachItemIdRef.current = null;
     studentDraftRef.current = "";
     coachDraftRef.current = "";
+    goalTimersRef.current.forEach((t) => clearTimeout(t));
+    goalTimersRef.current.clear();
+    seenGoalTokensRef.current = [];
     if (resetStatus) setStatus("idle");
   }, []);
 
@@ -182,6 +206,9 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
     setError(null);
     setMessages([]);
     setStatus("connecting");
+    goalTimersRef.current.forEach((t) => clearTimeout(t));
+    goalTimersRef.current.clear();
+    seenGoalTokensRef.current = [];
 
     try {
       const tokenRes = await fetch("/api/activity-voice-token", { method: "POST" });
@@ -207,9 +234,14 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
 
       channel.addEventListener("open", () => {
         const sessionInstruction = [
+          buildVoiceModeInstructions("award", mode, awardName),
           COACH_INSTRUCTIONS,
           currentDraftSummary
-            ? `Current form state: ${currentDraftSummary}. Don't ask about fields that are already filled — focus on missing details.`
+            ? `Current form state: ${currentDraftSummary}.${
+                mode === "edit"
+                  ? ""
+                  : " Don't ask about fields that are already filled — focus on missing details."
+              }`
             : "",
         ]
           .filter(Boolean)
@@ -234,7 +266,7 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
             item: {
               type: "message",
               role: "user",
-              content: [{ type: "input_text", text: "Hi — let's get started." }],
+              content: [{ type: "input_text", text: "Begin the session now." }],
             },
           }),
         );
@@ -249,6 +281,24 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
           payload.transcript
         ) {
           upsertMessage("student", payload.item_id ?? `student-${Date.now()}`, payload.transcript, true);
+
+          // Deterministic backstop: capture explicit goals from the student's
+          // own words even if the model never calls update_fields. Held briefly
+          // so a model capture can pre-empt it and we don't write it twice.
+          for (const goal of detectGoalsInTranscript(payload.transcript)) {
+            const tokens = goalTokens(goal.title);
+            if (!tokens.size) continue;
+            const sig = [...tokens].sort().join(" ");
+            if (goalTimersRef.current.has(sig)) continue;
+            if (seenGoalTokensRef.current.some((t) => goalsSimilar(t, tokens))) continue;
+            const timer = setTimeout(() => {
+              goalTimersRef.current.delete(sig);
+              if (seenGoalTokensRef.current.some((t) => goalsSimilar(t, tokens))) return;
+              seenGoalTokensRef.current.push(tokens);
+              onUpdate({ goals: [goal] });
+            }, 2000);
+            goalTimersRef.current.set(sig, timer);
+          }
         }
         if (payload.type === "conversation.item.input_audio_transcription.delta" && payload.delta) {
           upsertMessage("student", payload.item_id ?? `student-${Date.now()}`, payload.delta);
@@ -269,6 +319,15 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
             const argString = payload.arguments ?? payload.function_call?.arguments ?? "{}";
             const args = JSON.parse(argString);
             applyUpdate(args, onUpdate);
+            // Record goals the model captured so the transcript backstop won't
+            // write an equivalent goal a second time.
+            if (Array.isArray(args.goals)) {
+              for (const g of args.goals) {
+                if (g && typeof g.title === "string" && g.title.trim()) {
+                  seenGoalTokensRef.current.push(goalTokens(g.title));
+                }
+              }
+            }
             channel.send(
               JSON.stringify({
                 type: "conversation.item.create",
@@ -310,7 +369,7 @@ export function AwardVoiceCoach({ onUpdate, currentDraftSummary, autoStart = fal
       setStatus("error");
       setError(e instanceof Error ? e.message : "Voice setup failed");
     }
-  }, [status, onUpdate, currentDraftSummary, upsertMessage, cleanup]);
+  }, [status, onUpdate, currentDraftSummary, mode, awardName, upsertMessage, cleanup]);
 
   useEffect(() => {
     if (autoStart) {
