@@ -335,23 +335,24 @@ export function ActivitiesTab({
             Build a complete record once — leadership, service, work, art, athletics, research, family responsibilities. Then export it as a Common App entry, UC entry, or resume line.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Occasional actions — quiet text styling so they don't compete with Add. */}
           {activities.length > 0 && (
             <button
-              className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--almanac-ink-soft)] underline-offset-4 transition hover:text-[color:var(--almanac-ink)] hover:underline"
               onClick={() => setBulkExporting(true)}
               type="button"
             >
-              <FileText size={14} />
+              <FileText size={13} />
               Export
             </button>
           )}
           <button
-            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--almanac-ink-soft)] underline-offset-4 transition hover:text-[color:var(--almanac-ink)] hover:underline"
             onClick={() => setImporting(true)}
             type="button"
           >
-            <Upload size={14} />
+            <Upload size={13} />
             Import resume
           </button>
           <button
@@ -1440,7 +1441,7 @@ function normalizeName(name: string | undefined): string {
 
 type ExistingRef = { id: string; name: string };
 
-function ResumeImportModal({
+export function ResumeImportModal({
   existingActivities,
   existingAwards,
   onClose,
@@ -2196,7 +2197,7 @@ function ExportModal({
   );
 }
 
-function BulkExportModal({
+export function BulkExportModal({
   activities,
   awards,
   onClose,

@@ -10,6 +10,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
@@ -38,7 +39,7 @@ import {
 } from "@/app/dashboard/actions";
 import { LinkedGoals } from "@/components/linked-goals";
 import { AssociatedWorkSection } from "@/components/associated-work-section";
-import { ExportPreview } from "@/components/activities-tab";
+import { BulkExportModal, ExportPreview, ResumeImportModal } from "@/components/activities-tab";
 import { toast } from "@/components/toast";
 import { buildAwardRecordText, collectAssociatedWork } from "@/lib/associated-record";
 import {
@@ -166,6 +167,8 @@ export function AwardsTab({
   guidedSessions?: GuidedSession[];
 }) {
   const [editing, setEditing] = useState<{ draft: AwardDraft; voiceFirst: boolean } | null>(null);
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [, startTransition] = useTransition();
 
   const isEmpty = awards.length === 0;
@@ -228,7 +231,26 @@ export function AwardsTab({
             Track academic honors, competition placements, scholarships, and any recognition that strengthens an application. Optionally link each award to the activity it came from.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Occasional actions — quiet text styling so they don't compete with Add. */}
+          {awards.length > 0 && (
+            <button
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--almanac-ink-soft)] underline-offset-4 transition hover:text-[color:var(--almanac-ink)] hover:underline"
+              onClick={() => setBulkExporting(true)}
+              type="button"
+            >
+              <FileText size={13} />
+              Export
+            </button>
+          )}
+          <button
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[color:var(--almanac-ink-soft)] underline-offset-4 transition hover:text-[color:var(--almanac-ink)] hover:underline"
+            onClick={() => setImporting(true)}
+            type="button"
+          >
+            <Upload size={13} />
+            Import resume
+          </button>
           <button
             className="inline-flex items-center gap-2 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2.5 text-sm font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
             onClick={() => setEditing({ draft: emptyDraft(), voiceFirst: false })}
@@ -304,6 +326,22 @@ export function AwardsTab({
           sessions={guidedSessions}
           onCancel={() => setEditing(null)}
           onSaved={() => setEditing(null)}
+        />
+      )}
+
+      {bulkExporting && (
+        <BulkExportModal
+          activities={activities}
+          awards={awards}
+          onClose={() => setBulkExporting(false)}
+        />
+      )}
+
+      {importing && (
+        <ResumeImportModal
+          existingActivities={activities.map((a) => ({ id: a.id, name: a.name }))}
+          existingAwards={awards.map((a) => ({ id: a.id, name: a.name }))}
+          onClose={() => setImporting(false)}
         />
       )}
     </div>
