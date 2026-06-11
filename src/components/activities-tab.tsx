@@ -7,7 +7,6 @@ import {
   Copy,
   Download,
   FileText,
-  GripVertical,
   Mic,
   Pencil,
   Plus,
@@ -277,28 +276,6 @@ export function ActivitiesTab({
     });
   }, []);
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-
-  // Persist a new order. `moveItem` handles drag-and-drop (any position);
-  // `handleReorder` is the ±1 nudge used by the up/down buttons.
-  const moveItem = useCallback(
-    (from: number, to: number) => {
-      if (from === to || from < 0 || to < 0 || from >= activities.length || to >= activities.length) {
-        return;
-      }
-      const reordered = [...activities];
-      const [moved] = reordered.splice(from, 1);
-      reordered.splice(to, 0, moved);
-      const fd = new FormData();
-      fd.set("order", JSON.stringify(reordered.map((a) => a.id)));
-      startTransition(() => {
-        void reorderActivities(fd);
-      });
-    },
-    [activities],
-  );
-
   const handleReorder = useCallback(
     (index: number, direction: -1 | 1) => {
       const target = index + direction;
@@ -431,20 +408,6 @@ export function ActivitiesTab({
               allNotes={notes}
               onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
               onMoveDown={idx < activities.length - 1 ? () => handleReorder(idx, 1) : undefined}
-              index={idx}
-              dragIndex={dragIndex}
-              overIndex={overIndex}
-              onDragStartItem={setDragIndex}
-              onDragOverItem={setOverIndex}
-              onDropItem={(to) => {
-                if (dragIndex !== null) moveItem(dragIndex, to);
-                setDragIndex(null);
-                setOverIndex(null);
-              }}
-              onDragEndItem={() => {
-                setDragIndex(null);
-                setOverIndex(null);
-              }}
             />
           ))}
         </div>
@@ -496,13 +459,6 @@ function ActivityCard({
   onMoveUp,
   onMoveDown,
   rank,
-  index,
-  dragIndex = null,
-  overIndex = null,
-  onDragStartItem,
-  onDragOverItem,
-  onDropItem,
-  onDragEndItem,
 }: {
   activity: Activity;
   notes: Note[];
@@ -514,19 +470,8 @@ function ActivityCard({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   rank?: number;
-  index?: number;
-  dragIndex?: number | null;
-  overIndex?: number | null;
-  onDragStartItem?: (index: number) => void;
-  onDragOverItem?: (index: number) => void;
-  onDropItem?: (index: number) => void;
-  onDragEndItem?: () => void;
 }) {
   const [showTagging, setShowTagging] = useState(false);
-  const [grabbing, setGrabbing] = useState(false);
-  const canDrag = !isSample && index !== undefined && Boolean(onDropItem);
-  const isDragging = canDrag && dragIndex === index;
-  const isOver = canDrag && overIndex === index && dragIndex !== null && dragIndex !== index;
   // Collapsed by default so the dashboard stays scannable — name + position
   // only, with the rest (description, dates, tags, goals…) behind a click.
   // Sample cards start open so the template preview is visible.
@@ -546,37 +491,10 @@ function ActivityCard({
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
           : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
-        isDragging ? "opacity-50" : "",
-        isOver ? "ring-2 ring-[color:var(--almanac-olive)]" : "",
       ].join(" ")}
-      draggable={canDrag && grabbing}
-      onDragEnd={() => {
-        setGrabbing(false);
-        onDragEndItem?.();
-      }}
-      onDragOver={(event) => {
-        if (!canDrag || dragIndex === null) return;
-        event.preventDefault();
-        if (index !== undefined) onDragOverItem?.(index);
-      }}
-      onDragStart={(event) => {
-        if (index === undefined) return;
-        event.dataTransfer.effectAllowed = "move";
-        onDragStartItem?.(index);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setGrabbing(false);
-        if (index !== undefined) onDropItem?.(index);
-      }}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
-        <ReorderGutter
-          onGrab={setGrabbing}
-          onMoveDown={onMoveDown}
-          onMoveUp={onMoveUp}
-          rank={rank}
-        />
+        <ReorderGutter onMoveDown={onMoveDown} onMoveUp={onMoveUp} rank={rank} />
       )}
 
       <div className="min-w-0 flex-1">
@@ -727,38 +645,20 @@ function startDeepenSession(activityId: string) {
 }
 
 /**
- * Compact reorder gutter: a drag handle (grab to drag the whole card) with the
- * rank shown as a small badge, plus dimmed up/down nudges as a keyboard/touch
- * fallback (native drag doesn't fire on touch). `onGrab` flips the parent card's
- * `draggable` on while the handle is pressed, so only the handle initiates drag.
+ * Reorder gutter: up/down nudge buttons with the rank as a badge between them.
+ * The up button is disabled on the first item and the down button on the last.
  */
 export function ReorderGutter({
   rank,
   onMoveUp,
   onMoveDown,
-  onGrab,
 }: {
   rank: number;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  onGrab: (grabbing: boolean) => void;
 }) {
   return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
-      <button
-        aria-label={`Drag to reorder, currently #${rank}`}
-        className="cursor-grab touch-none rounded-md p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] active:cursor-grabbing"
-        onPointerDown={() => onGrab(true)}
-        onPointerCancel={() => onGrab(false)}
-        onPointerUp={() => onGrab(false)}
-        title="Drag to reorder"
-        type="button"
-      >
-        <GripVertical size={15} />
-      </button>
-      <span className="font-mono text-[0.62rem] font-semibold text-[color:var(--almanac-ink-soft)]">
-        #{rank}
-      </span>
+    <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
       <button
         className="flex size-6 items-center justify-center rounded-md text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:opacity-20 disabled:hover:bg-transparent"
         disabled={!onMoveUp}
@@ -766,8 +666,11 @@ export function ReorderGutter({
         title="Move up"
         type="button"
       >
-        <ArrowUp size={13} strokeWidth={2.4} />
+        <ArrowUp size={14} strokeWidth={2.4} />
       </button>
+      <span className="flex size-7 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-white/60 font-mono text-[0.7rem] font-semibold text-[color:var(--almanac-ink)]">
+        {rank}
+      </span>
       <button
         className="flex size-6 items-center justify-center rounded-md text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:opacity-20 disabled:hover:bg-transparent"
         disabled={!onMoveDown}
@@ -775,7 +678,7 @@ export function ReorderGutter({
         title="Move down"
         type="button"
       >
-        <ArrowDown size={13} strokeWidth={2.4} />
+        <ArrowDown size={14} strokeWidth={2.4} />
       </button>
     </div>
   );

@@ -205,26 +205,6 @@ export function AwardsTab({
     });
   }, []);
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-
-  const moveItem = useCallback(
-    (from: number, to: number) => {
-      if (from === to || from < 0 || to < 0 || from >= awards.length || to >= awards.length) {
-        return;
-      }
-      const reordered = [...awards];
-      const [moved] = reordered.splice(from, 1);
-      reordered.splice(to, 0, moved);
-      const fd = new FormData();
-      fd.set("order", JSON.stringify(reordered.map((a) => a.id)));
-      startTransition(() => {
-        void reorderAwards(fd);
-      });
-    },
-    [awards],
-  );
-
   const handleReorder = useCallback(
     (index: number, direction: -1 | 1) => {
       const target = index + direction;
@@ -327,20 +307,6 @@ export function AwardsTab({
               onDelete={() => handleDelete(a.id)}
               onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
               onMoveDown={idx < awards.length - 1 ? () => handleReorder(idx, 1) : undefined}
-              index={idx}
-              dragIndex={dragIndex}
-              overIndex={overIndex}
-              onDragStartItem={setDragIndex}
-              onDragOverItem={setOverIndex}
-              onDropItem={(to) => {
-                if (dragIndex !== null) moveItem(dragIndex, to);
-                setDragIndex(null);
-                setOverIndex(null);
-              }}
-              onDragEndItem={() => {
-                setDragIndex(null);
-                setOverIndex(null);
-              }}
             />
           ))}
         </div>
@@ -392,13 +358,6 @@ function AwardCard({
   onMoveDown,
   isSample = false,
   rank,
-  index,
-  dragIndex = null,
-  overIndex = null,
-  onDragStartItem,
-  onDragOverItem,
-  onDropItem,
-  onDragEndItem,
 }: {
   award: Award;
   activities: Activity[];
@@ -409,22 +368,11 @@ function AwardCard({
   onMoveDown?: () => void;
   isSample?: boolean;
   rank?: number;
-  index?: number;
-  dragIndex?: number | null;
-  overIndex?: number | null;
-  onDragStartItem?: (index: number) => void;
-  onDragOverItem?: (index: number) => void;
-  onDropItem?: (index: number) => void;
-  onDragEndItem?: () => void;
 }) {
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
   // Collapsed by default so the dashboard stays scannable — just the title,
   // with details/tags/goals behind a click. Samples start open as previews.
   const [expanded, setExpanded] = useState(isSample);
-  const [grabbing, setGrabbing] = useState(false);
-  const canDrag = !isSample && index !== undefined && Boolean(onDropItem);
-  const isDragging = canDrag && dragIndex === index;
-  const isOver = canDrag && overIndex === index && dragIndex !== null && dragIndex !== index;
 
   return (
     <article
@@ -433,37 +381,10 @@ function AwardCard({
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
           : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
-        isDragging ? "opacity-50" : "",
-        isOver ? "ring-2 ring-[color:var(--almanac-olive)]" : "",
       ].join(" ")}
-      draggable={canDrag && grabbing}
-      onDragEnd={() => {
-        setGrabbing(false);
-        onDragEndItem?.();
-      }}
-      onDragOver={(event) => {
-        if (!canDrag || dragIndex === null) return;
-        event.preventDefault();
-        if (index !== undefined) onDragOverItem?.(index);
-      }}
-      onDragStart={(event) => {
-        if (index === undefined) return;
-        event.dataTransfer.effectAllowed = "move";
-        onDragStartItem?.(index);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setGrabbing(false);
-        if (index !== undefined) onDropItem?.(index);
-      }}
     >
       {rank !== undefined && (onMoveUp || onMoveDown) && (
-        <ReorderGutter
-          onGrab={setGrabbing}
-          onMoveDown={onMoveDown}
-          onMoveUp={onMoveUp}
-          rank={rank}
-        />
+        <ReorderGutter onMoveDown={onMoveDown} onMoveUp={onMoveUp} rank={rank} />
       )}
 
       <div className="min-w-0 flex-1">
