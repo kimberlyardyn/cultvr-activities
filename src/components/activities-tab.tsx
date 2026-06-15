@@ -2515,7 +2515,7 @@ export function ExportPreview({
           </button>
         ) : null}
         <button
-          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] shadow-sm transition hover:bg-white"
           onClick={copy}
           type="button"
         >
@@ -2523,20 +2523,20 @@ export function ExportPreview({
           {copied ? "Copied!" : "Copy text"}
         </button>
         <button
-          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/5"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-4 py-2 text-xs font-medium text-[color:var(--almanac-ink)] shadow-sm transition hover:bg-white"
           onClick={downloadDocx}
           type="button"
         >
           <FileText size={13} />
-          Word
+          Download Word
         </button>
         <button
-          className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--almanac-ink)] px-4 py-2 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--almanac-ink)] px-4 py-2 text-xs font-semibold text-[color:var(--almanac-paper)] shadow-sm transition hover:opacity-90"
           onClick={downloadPdf}
           type="button"
         >
           <Download size={13} />
-          PDF
+          Download PDF
         </button>
       </div>
     </div>
