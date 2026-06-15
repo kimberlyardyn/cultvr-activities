@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 
 import {
   AwardVoiceCoach,
@@ -921,7 +922,10 @@ function AwardExportModal({
     ["resume", "Resume"],
   ];
 
-  return (
+  // Portal to <body> so the modal escapes the editor's backdrop-blurred,
+  // scrollable overlay (otherwise fixed positioning is relative to it and the
+  // modal can render off-screen).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
       <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
         <header className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-6 py-4">
@@ -968,7 +972,8 @@ function AwardExportModal({
           initialText={generated}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

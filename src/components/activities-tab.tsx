@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 
 import {
   commitImportedActivities,
@@ -2150,7 +2151,10 @@ function ExportModal({
     ...(hasFull ? ([["full", "Full record"]] as Array<[ExportTab, string]>) : []),
   ];
 
-  return (
+  // Portal to <body> so the modal isn't trapped inside the editor's
+  // backdrop-blurred, scrollable overlay (which becomes the containing block
+  // for fixed positioning and would otherwise render this off-screen).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
       <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
         <header className="flex items-center justify-between border-b border-[color:var(--almanac-rule)] px-6 py-4">
@@ -2201,7 +2205,8 @@ function ExportModal({
           ongoing={activity.in_progress}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2391,13 +2396,23 @@ export function ExportPreview({
   }, [text]);
 
   function downloadPdf() {
-    exportAsPdf(docTitle, [{ heading: "", body: text }], fileBase);
-    toast.success("Downloaded as PDF.");
+    try {
+      exportAsPdf(docTitle, [{ heading: "", body: text }], fileBase);
+      toast.success("Downloaded as PDF.");
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      toast.error("Couldn't generate the PDF. Please try again.");
+    }
   }
 
   async function downloadDocx() {
-    await exportAsDocx(docTitle, [{ heading: "", body: text }], fileBase);
-    toast.success("Downloaded as Word document.");
+    try {
+      await exportAsDocx(docTitle, [{ heading: "", body: text }], fileBase);
+      toast.success("Downloaded as Word document.");
+    } catch (err) {
+      console.error("Word export failed:", err);
+      toast.error("Couldn't generate the Word doc. Please try again.");
+    }
   }
 
   // Pull the description block out of the formatted text (the line after
