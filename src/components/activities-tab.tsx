@@ -2151,9 +2151,10 @@ function ExportModal({
     ...(hasFull ? ([["full", "Full record"]] as Array<[ExportTab, string]>) : []),
   ];
 
-  // Portal to <body> so the modal isn't trapped inside the editor's
-  // backdrop-blurred, scrollable overlay (which becomes the containing block
-  // for fixed positioning and would otherwise render this off-screen).
+  // Portal to the workspace root (not <body>): it holds the --almanac-* theme
+  // variables and the dark-mode attribute, and has no transform/filter — so the
+  // modal is themed correctly AND escapes the editor's backdrop-blur overlay
+  // (which would otherwise trap fixed positioning and render it off-screen).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
       <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
@@ -2206,7 +2207,7 @@ function ExportModal({
         />
       </div>
     </div>,
-    document.body,
+    document.getElementById("cultvr-workspace") ?? document.body,
   );
 }
 

@@ -302,6 +302,7 @@ export function AlmanacWorkspace({
       className="min-h-[100dvh] overflow-x-hidden text-[color:var(--almanac-ink)] lg:h-[100dvh] lg:overflow-hidden"
       data-cultvr-font={fontFamily}
       data-cultvr-appearance={appearance}
+      id="cultvr-workspace"
       style={
         {
           "--almanac-paper": activePalette.paper,

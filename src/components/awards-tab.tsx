@@ -922,9 +922,10 @@ function AwardExportModal({
     ["resume", "Resume"],
   ];
 
-  // Portal to <body> so the modal escapes the editor's backdrop-blurred,
-  // scrollable overlay (otherwise fixed positioning is relative to it and the
-  // modal can render off-screen).
+  // Portal to the workspace root (holds the --almanac-* theme vars + dark-mode
+  // attribute, no transform/filter) so the modal is themed correctly AND
+  // escapes the editor's backdrop-blur overlay that would otherwise trap fixed
+  // positioning and render it off-screen.
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
       <div className="my-8 w-full max-w-2xl rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] shadow-2xl">
@@ -973,7 +974,7 @@ function AwardExportModal({
         />
       </div>
     </div>,
-    document.body,
+    document.getElementById("cultvr-workspace") ?? document.body,
   );
 }
 
