@@ -173,9 +173,39 @@ export function AwardsTab({
   const [editing, setEditing] = useState<{ draft: AwardDraft; voiceFirst: boolean } | null>(null);
   const [bulkExporting, setBulkExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [sortBy, setSortBy] = useState<"manual" | "recent" | "level" | "name">("manual");
+  const [levelFilter, setLevelFilter] = useState<string>("all");
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [, startTransition] = useTransition();
 
   const isEmpty = awards.length === 0;
+
+  // Distinct levels for the filter dropdown (the award analog of category).
+  const levels = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of awards) if (a.level) set.add(a.level);
+    return Array.from(set).sort((x, y) => x.localeCompare(y));
+  }, [awards]);
+
+  // Manual reordering only applies in the unsorted, unfiltered view.
+  const reorderable = sortBy === "manual" && levelFilter === "all";
+
+  const visibleAwards = useMemo(() => {
+    const list =
+      levelFilter === "all" ? awards : awards.filter((a) => (a.level || "") === levelFilter);
+    if (sortBy === "manual") return list;
+    const sorted = [...list];
+    if (sortBy === "recent") {
+      sorted.sort((a, b) => (b.year || "").localeCompare(a.year || ""));
+    } else if (sortBy === "level") {
+      sorted.sort(
+        (a, b) => (a.level || "~").localeCompare(b.level || "~") || a.name.localeCompare(b.name),
+      );
+    } else if (sortBy === "name") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return sorted;
+  }, [awards, levelFilter, sortBy]);
 
   const sampleAwards: Award[] = useMemo(
     () =>
@@ -296,21 +326,89 @@ export function AwardsTab({
           </div>
         </section>
       ) : (
-        <div className="grid gap-3">
-          {awards.map((a, idx) => (
-            <AwardCard
-              key={a.id}
-              award={a}
-              rank={idx + 1}
-              activities={activities}
-              goals={goals.filter((g) => g.award_id === a.id)}
-              onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
-              onDelete={() => handleDelete(a.id)}
-              onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
-              onMoveDown={idx < awards.length - 1 ? () => handleReorder(idx, 1) : undefined}
-            />
-          ))}
-        </div>
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+              Sort
+              <select
+                className="rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none transition hover:bg-white focus:border-[color:var(--almanac-olive)]"
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                value={sortBy}
+              >
+                <option value="manual">Manual order</option>
+                <option value="recent">Most recent</option>
+                <option value="level">Level</option>
+                <option value="name">Name (A–Z)</option>
+              </select>
+            </label>
+            {levels.length > 0 && (
+              <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+                Level
+                <select
+                  className="rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none transition hover:bg-white focus:border-[color:var(--almanac-olive)]"
+                  onChange={(e) => setLevelFilter(e.target.value)}
+                  value={levelFilter}
+                >
+                  <option value="all">All</option>
+                  {levels.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="ml-auto inline-flex items-center gap-2">
+              <span className="text-xs text-[color:var(--almanac-ink-soft)]">
+                {visibleAwards.length} of {awards.length}
+              </span>
+              <div className="inline-flex rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-0.5">
+                {(["comfortable", "compact"] as const).map((d) => (
+                  <button
+                    className={[
+                      "rounded-full px-3 py-1 text-xs font-medium transition",
+                      density === d
+                        ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
+                        : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
+                    ].join(" ")}
+                    key={d}
+                    onClick={() => setDensity(d)}
+                    type="button"
+                  >
+                    {d === "comfortable" ? "Comfortable" : "Compact"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {visibleAwards.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-6 text-center text-sm text-[color:var(--almanac-ink-soft)]">
+              No awards match this filter.
+            </div>
+          ) : (
+            <div className={density === "compact" ? "grid gap-2" : "grid gap-3"}>
+              {visibleAwards.map((a, idx) => (
+                <AwardCard
+                  key={a.id}
+                  award={a}
+                  compact={density === "compact"}
+                  rank={reorderable ? idx + 1 : undefined}
+                  activities={activities}
+                  goals={goals.filter((g) => g.award_id === a.id)}
+                  onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
+                  onDelete={() => handleDelete(a.id)}
+                  onMoveUp={reorderable && idx > 0 ? () => handleReorder(idx, -1) : undefined}
+                  onMoveDown={
+                    reorderable && idx < visibleAwards.length - 1
+                      ? () => handleReorder(idx, 1)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {editing && (
@@ -358,6 +456,7 @@ function AwardCard({
   onMoveUp,
   onMoveDown,
   isSample = false,
+  compact = false,
   rank,
 }: {
   award: Award;
@@ -368,6 +467,7 @@ function AwardCard({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   isSample?: boolean;
+  compact?: boolean;
   rank?: number;
 }) {
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
@@ -378,7 +478,8 @@ function AwardCard({
   return (
     <article
       className={[
-        "flex gap-3 rounded-2xl border p-4 transition",
+        "flex gap-3 rounded-2xl border transition",
+        compact ? "p-2.5" : "p-4",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
           : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
