@@ -354,10 +354,6 @@ export function DiscoverView() {
             ))}
           </div>
         )}
-
-        <p className="mt-8 text-xs italic text-[color:var(--almanac-ink-soft)]">
-          Cards link to external sites. Want a resource added? Contact us to suggest an addition.
-        </p>
       </div>
     </div>
   );
