@@ -27,7 +27,7 @@ import {
   getResumeProfile,
   parseActivitiesFromText,
   reorderActivities,
-  tagNoteToActivity,
+  toggleNoteLink,
   updateActivity,
   type ExtractedActivity,
   type ExtractedAward,
@@ -40,7 +40,7 @@ import { LinkedGoals } from "@/components/linked-goals";
 import { AssociatedWorkSection } from "@/components/associated-work-section";
 import { toast } from "@/components/toast";
 import { exportAsDocx, exportAsPdf } from "@/lib/export-doc";
-import { buildActivityRecordText, collectAssociatedWork } from "@/lib/associated-record";
+import { buildActivityRecordText, collectAssociatedWork, noteLinkedTo } from "@/lib/associated-record";
 import {
   PendingGoalsEditor,
   mergeVoiceGoals,
@@ -402,7 +402,7 @@ export function ActivitiesTab({
               key={a.id}
               activity={a}
               rank={idx + 1}
-              notes={notes.filter((n) => n.activity_id === a.id)}
+              notes={notes.filter((n) => noteLinkedTo(n, "activity", a.id))}
               goals={goals.filter((g) => g.activity_id === a.id)}
               onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
               onDelete={() => handleDelete(a.id)}
@@ -703,28 +703,35 @@ function TaggedPosts({
   const [newBody, setNewBody] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const untagged = allNotes.filter((n) => n.activity_id !== activityId);
+  const untagged = allNotes.filter((n) => !noteLinkedTo(n, "activity", activityId));
 
   const handleTagExisting = useCallback(
     (noteId: string) => {
       const fd = new FormData();
       fd.set("note_id", noteId);
-      fd.set("activity_id", activityId);
+      fd.set("kind", "activity");
+      fd.set("entity_id", activityId);
+      fd.set("linked", "true");
       startTransition(() => {
-        void tagNoteToActivity(fd);
+        void toggleNoteLink(fd);
       });
     },
     [activityId],
   );
 
-  const handleUntag = useCallback((noteId: string) => {
-    const fd = new FormData();
-    fd.set("note_id", noteId);
-    fd.set("activity_id", "");
-    startTransition(() => {
-      void tagNoteToActivity(fd);
-    });
-  }, []);
+  const handleUntag = useCallback(
+    (noteId: string) => {
+      const fd = new FormData();
+      fd.set("note_id", noteId);
+      fd.set("kind", "activity");
+      fd.set("entity_id", activityId);
+      fd.set("linked", "false");
+      startTransition(() => {
+        void toggleNoteLink(fd);
+      });
+    },
+    [activityId],
+  );
 
   const handleCreateNote = useCallback(() => {
     if (!newTitle.trim() || !newBody.trim()) return;

@@ -1149,13 +1149,23 @@ export async function createNoteForActivity(formData: FormData) {
   const body = value(formData, "body");
   const activityId = value(formData, "activity_id") || null;
   if (!title || !body) return;
-  await supabase.from("notes").insert({
-    user_id: user.id,
-    title,
-    body,
-    category: "Reflection",
-    activity_id: activityId,
-  });
+  const inserted = await supabase
+    .from("notes")
+    .insert({
+      user_id: user.id,
+      title,
+      body,
+      category: "Reflection",
+      activity_id: activityId,
+    })
+    .select("id")
+    .single();
+  if (!inserted.error && inserted.data && activityId) {
+    const { error } = await supabase
+      .from("note_activities")
+      .insert({ note_id: inserted.data.id, activity_id: activityId, user_id: user.id });
+    if (error) console.error("note_activities insert failed", error);
+  }
   revalidatePath("/dashboard");
 }
 
@@ -1186,13 +1196,25 @@ export async function createNoteForParent(formData: FormData) {
   if (!title || !body || (parentKind !== "activity" && parentKind !== "award")) return;
   const link =
     parentKind === "activity" ? { activity_id: parentId } : { award_id: parentId };
-  await supabase.from("notes").insert({
-    user_id: user.id,
-    title,
-    body,
-    category: "Reflection",
-    ...link,
-  });
+  const inserted = await supabase
+    .from("notes")
+    .insert({
+      user_id: user.id,
+      title,
+      body,
+      category: "Reflection",
+      ...link,
+    })
+    .select("id")
+    .single();
+  if (!inserted.error && inserted.data && parentId) {
+    const table = parentKind === "activity" ? "note_activities" : "note_awards";
+    const column = parentKind === "activity" ? "activity_id" : "award_id";
+    const { error } = await supabase
+      .from(table)
+      .insert({ note_id: inserted.data.id, [column]: parentId, user_id: user.id });
+    if (error) console.error(`${table} insert failed`, error);
+  }
   revalidatePath("/dashboard");
 }
 

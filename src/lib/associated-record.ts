@@ -17,6 +17,17 @@ export type AssociatedWork = {
   sessions: GuidedSession[];
 };
 
+/**
+ * Whether a note is linked to a given activity/award. Prefers the many-to-many
+ * join data (note.activityIds / note.awardIds, populated by the dashboard
+ * loader); falls back to the legacy single FK when join data isn't present.
+ */
+export function noteLinkedTo(note: Note, kind: "activity" | "award", id: string): boolean {
+  const ids = kind === "activity" ? note.activityIds : note.awardIds;
+  if (ids && ids.length) return ids.includes(id);
+  return (kind === "activity" ? note.activity_id : note.award_id ?? null) === id;
+}
+
 export function collectAssociatedWork(params: {
   kind: "activity" | "award";
   id: string;
@@ -26,9 +37,7 @@ export function collectAssociatedWork(params: {
 }): AssociatedWork {
   const { kind, id, notes, goals, sessions } = params;
 
-  const linkedNotes = notes.filter((n) =>
-    kind === "activity" ? n.activity_id === id : n.award_id === id,
-  );
+  const linkedNotes = notes.filter((n) => noteLinkedTo(n, kind, id));
   const noteIds = new Set(linkedNotes.map((n) => n.id));
   const goalIds = new Set(
     goals

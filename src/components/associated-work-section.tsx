@@ -3,7 +3,8 @@
 import { ChevronDown, FileText, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 
-import { createNoteForParent, tagNoteToParent } from "@/app/dashboard/actions";
+import { createNoteForParent, toggleNoteLink } from "@/app/dashboard/actions";
+import { noteLinkedTo } from "@/lib/associated-record";
 import type { GuidedSession, Note } from "@/lib/types";
 
 /**
@@ -47,7 +48,7 @@ export function AssociatedWorkSection({
   }, []);
 
   const isLinked = useCallback(
-    (n: Note) => (parentKind === "activity" ? n.activity_id === parentId : n.award_id === parentId),
+    (n: Note) => noteLinkedTo(n, parentKind, parentId),
     [parentKind, parentId],
   );
 
@@ -57,10 +58,11 @@ export function AssociatedWorkSection({
     (noteId: string, link: boolean) => {
       const fd = new FormData();
       fd.set("note_id", noteId);
-      fd.set("parent_kind", parentKind);
-      fd.set("parent_id", link ? parentId : "");
+      fd.set("kind", parentKind);
+      fd.set("entity_id", parentId);
+      fd.set("linked", String(link));
       startTransition(() => {
-        void tagNoteToParent(fd);
+        void toggleNoteLink(fd);
       });
     },
     [parentKind, parentId],
