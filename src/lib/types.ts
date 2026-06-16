@@ -7,6 +7,11 @@ export type Note = {
   category: string;
   activity_id: string | null;
   award_id?: string | null;
+  /** All activities this note is linked to (many-to-many). Populated by the
+   *  dashboard loader from the note_activities join table. */
+  activityIds?: string[];
+  /** All awards this note is linked to (many-to-many), from note_awards. */
+  awardIds?: string[];
   created_at: string;
   updated_at?: string | null;
 };

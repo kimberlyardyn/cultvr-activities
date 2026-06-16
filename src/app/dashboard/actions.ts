@@ -124,6 +124,17 @@ function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+/** Parse a JSON array of ids sent from the client; tolerant of missing/bad input. */
+function parseIdList(raw: string): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Coerce a possibly-fractional/invalid number to a rounded integer in range. */
 function toIntInRange(n: unknown, min: number, max: number): number {
   const num = typeof n === "number" ? n : Number(n);
@@ -302,6 +313,14 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
   const promptAnswers = parsePromptAnswers(parsed.prompt_answers);
   const answeredCount = promptAnswers.filter((item) => item.answer?.trim()).length;
 
+  // The session can link to several activities/awards. The single FK columns
+  // keep the first of each (so existing readers still work); the full sets are
+  // stored in the note_activities / note_awards join tables below.
+  const activityIds = parseIdList(value(formData, "activity_ids"));
+  const awardIds = parseIdList(value(formData, "award_ids"));
+  const primaryActivityId = activityIds[0] ?? parsed.activity_id ?? null;
+  const primaryAwardId = awardIds[0] ?? parsed.award_id ?? null;
+
   const noteResult = await supabase
     .from("notes")
     .insert({
@@ -309,13 +328,30 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
       title: parsed.note_title,
       body: parsed.note_body,
       category: `Guided: ${parsed.session_type}`.slice(0, 40),
-      activity_id: parsed.activity_id ?? null,
-      award_id: parsed.award_id ?? null,
+      activity_id: primaryActivityId,
+      award_id: primaryAwardId,
     })
     .select("id")
     .single();
 
   if (noteResult.error) throw noteResult.error;
+
+  const noteId = noteResult.data.id;
+  // Link writes are non-fatal: the primary FK above already captured the first
+  // of each, so a missing join table (e.g. migration not yet applied) must not
+  // fail the whole save.
+  if (activityIds.length) {
+    const { error } = await supabase
+      .from("note_activities")
+      .insert(activityIds.map((activity_id) => ({ note_id: noteId, activity_id, user_id: user.id })));
+    if (error) console.error("note_activities insert failed", error);
+  }
+  if (awardIds.length) {
+    const { error } = await supabase
+      .from("note_awards")
+      .insert(awardIds.map((award_id) => ({ note_id: noteId, award_id, user_id: user.id })));
+    if (error) console.error("note_awards insert failed", error);
+  }
 
   const sessionResult = await supabase
     .from("guided_sessions")
@@ -382,6 +418,54 @@ export async function createGuidedSessionArtifacts(formData: FormData) {
       console.error("student memory inference save failed", error);
     }
   }
+
+  revalidatePath("/dashboard");
+}
+
+/** Link or unlink a note to an activity OR award in the many-to-many join
+ *  tables (note_activities / note_awards). `linked` controls add vs remove.
+ *  The note's single FK column is kept in sync with the first remaining link so
+ *  other views that read note.activity_id / note.award_id stay consistent. */
+export async function toggleNoteLink(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const noteId = value(formData, "note_id");
+  const kind = value(formData, "kind");
+  const entityId = value(formData, "entity_id");
+  const linked = value(formData, "linked") === "true";
+  if (!noteId || !entityId || (kind !== "activity" && kind !== "award")) return;
+
+  const table = kind === "activity" ? "note_activities" : "note_awards";
+  const column = kind === "activity" ? "activity_id" : "award_id";
+
+  if (linked) {
+    const { error } = await supabase
+      .from(table)
+      .upsert({ note_id: noteId, [column]: entityId, user_id: user.id });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("note_id", noteId)
+      .eq(column, entityId)
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }
+
+  // Re-derive the primary FK from whatever links remain (oldest first).
+  const { data: remaining } = await supabase
+    .from(table)
+    .select(column)
+    .eq("note_id", noteId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const primary = (remaining?.[0] as Record<string, string> | undefined)?.[column] ?? null;
+  await supabase
+    .from("notes")
+    .update({ [column]: primary, updated_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
 
   revalidatePath("/dashboard");
 }

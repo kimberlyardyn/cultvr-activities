@@ -483,3 +483,39 @@ using (
   bucket_id = 'student_uploads'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- Many-to-many links from a note to multiple activities / awards (see
+-- migrations/015_note_link_tables.sql).
+create table if not exists public.note_activities (
+  note_id uuid not null references public.notes(id) on delete cascade,
+  activity_id uuid not null references public.activities(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (note_id, activity_id)
+);
+
+create table if not exists public.note_awards (
+  note_id uuid not null references public.notes(id) on delete cascade,
+  award_id uuid not null references public.awards(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (note_id, award_id)
+);
+
+create index if not exists note_activities_note_id_idx on public.note_activities(note_id);
+create index if not exists note_awards_note_id_idx on public.note_awards(note_id);
+
+alter table public.note_activities enable row level security;
+alter table public.note_awards enable row level security;
+
+drop policy if exists "note_activities_all_own" on public.note_activities;
+create policy "note_activities_all_own"
+on public.note_activities for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "note_awards_all_own" on public.note_awards;
+create policy "note_awards_all_own"
+on public.note_awards for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);

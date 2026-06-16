@@ -14,6 +14,7 @@ import {
 import {
   createGuidedSessionArtifacts,
   deleteNote,
+  toggleNoteLink,
   updateNote,
 } from "@/app/dashboard/actions";
 import { toast } from "@/components/toast";
@@ -498,13 +499,10 @@ export function GuidedSessionsView({
     const linkedActivities = activities.filter((a) => linkedActivityIds.has(a.id));
     const linkedAwards = awards.filter((a) => linkedAwardIds.has(a.id));
     const linkedGoals = goals.filter((g) => linkedGoalIds.has(g.id));
+    // Activity/award links are now stored as real, clickable relationships (and
+    // editable from the history card), so they no longer get written into the
+    // body text. Targets stay as a body line for now.
     const linkLines: string[] = [];
-    if (linkedActivities.length) {
-      linkLines.push(`Linked activities: ${linkedActivities.map((a) => a.name).join(", ")}`);
-    }
-    if (linkedAwards.length) {
-      linkLines.push(`Linked awards: ${linkedAwards.map((a) => a.name).join(", ")}`);
-    }
     if (linkedGoals.length) {
       linkLines.push(`Linked targets: ${linkedGoals.map((g) => g.title).join(", ")}`);
     }
@@ -534,6 +532,8 @@ export function GuidedSessionsView({
         })),
       ),
     );
+    fd.set("activity_ids", JSON.stringify(linkedActivities.map((a) => a.id)));
+    fd.set("award_ids", JSON.stringify(linkedAwards.map((a) => a.id)));
     if (linkedActivities[0]) fd.set("activity_id", linkedActivities[0].id);
     if (linkedAwards[0]) fd.set("award_id", linkedAwards[0].id);
     if (linkedGoals[0]) fd.set("goal_id", linkedGoals[0].id);
@@ -611,7 +611,9 @@ export function GuidedSessionsView({
         </div>
       </div>
 
-      {panel === "history" ? <GuidedNotesPreview notes={sessionNotes} /> : null}
+      {panel === "history" ? (
+        <GuidedNotesPreview activities={activities} awards={awards} notes={sessionNotes} />
+      ) : null}
 
       <div
         className={[
@@ -958,14 +960,22 @@ export function GuidedSessionsView({
   );
 }
 
-function GuidedNotesPreview({ notes }: { notes: Note[] }) {
+function GuidedNotesPreview({
+  notes,
+  activities,
+  awards,
+}: {
+  notes: Note[];
+  activities: Activity[];
+  awards: Award[];
+}) {
   return (
     <div className="px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:px-9">
       <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
         <SectionKicker>Recent guided notes</SectionKicker>
         <div className="mt-4 grid gap-3">
           {notes.slice(0, 8).map((note) => (
-            <HistoryNoteCard key={note.id} note={note} />
+            <HistoryNoteCard activities={activities} awards={awards} key={note.id} note={note} />
           ))}
           {!notes.length ? (
             <Empty label="Complete a guided session to create your first saved session note." />
@@ -976,12 +986,65 @@ function GuidedNotesPreview({ notes }: { notes: Note[] }) {
   );
 }
 
-function HistoryNoteCard({ note }: { note: Note }) {
+/** Strip the legacy "Linked activities: …" / "Linked awards: …" lines that
+ *  older sessions baked into their body. Those links are shown as editable tags
+ *  now, so the text would just be duplicated noise. */
+function stripLegacyLinkLines(body: string): string {
+  return body
+    .split("\n")
+    .filter((line) => !/^\s*Linked (activities|awards):/i.test(line))
+    .join("\n")
+    .trim();
+}
+
+function HistoryNoteCard({
+  note,
+  activities,
+  awards,
+}: {
+  note: Note;
+  activities: Activity[];
+  awards: Award[];
+}) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [pending, startTransition] = useTransition();
+  // Optimistic link state so tags respond instantly before the server confirms.
+  const [activityIds, setActivityIds] = useState<Set<string>>(new Set(note.activityIds ?? []));
+  const [awardIds, setAwardIds] = useState<Set<string>>(new Set(note.awardIds ?? []));
+
+  function toggleLink(kind: "activity" | "award", entityId: string) {
+    const set = kind === "activity" ? activityIds : awardIds;
+    const apply = kind === "activity" ? setActivityIds : setAwardIds;
+    const linked = !set.has(entityId);
+    apply((prev) => {
+      const next = new Set(prev);
+      if (linked) next.add(entityId);
+      else next.delete(entityId);
+      return next;
+    });
+    const fd = new FormData();
+    fd.set("note_id", note.id);
+    fd.set("kind", kind);
+    fd.set("entity_id", entityId);
+    fd.set("linked", String(linked));
+    startTransition(async () => {
+      try {
+        await toggleNoteLink(fd);
+      } catch (err) {
+        // Roll back the optimistic change if the server rejected it.
+        apply((prev) => {
+          const next = new Set(prev);
+          if (linked) next.delete(entityId);
+          else next.add(entityId);
+          return next;
+        });
+        toast.error(err instanceof Error ? err.message : "Failed to update link.");
+      }
+    });
+  }
 
   function save() {
     if (!title.trim() || !body.trim()) return;
@@ -1057,6 +1120,13 @@ function HistoryNoteCard({ note }: { note: Note }) {
     );
   }
 
+  // Names of the currently-linked activities/awards, shown as read-only pills
+  // when the card is collapsed.
+  const linkedTags = [
+    ...activities.filter((a) => activityIds.has(a.id)),
+    ...awards.filter((a) => awardIds.has(a.id)),
+  ];
+
   return (
     <article className="group rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -1098,16 +1168,69 @@ function HistoryNoteCard({ note }: { note: Note }) {
       <p
         className={`mt-2 whitespace-pre-wrap text-sm leading-6 text-[color:var(--almanac-ink-soft)] ${expanded ? "" : "line-clamp-2"}`}
       >
-        {note.body}
+        {stripLegacyLinkLines(note.body)}
       </p>
-      {!expanded && (
-        <button
-          className="mt-2 text-xs font-medium text-[color:var(--almanac-olive)] transition hover:opacity-80"
-          onClick={() => setExpanded(true)}
-          type="button"
-        >
-          Read full session
-        </button>
+
+      {expanded ? (
+        <div className="mt-3 space-y-3 border-t border-[color:var(--almanac-rule)] pt-3">
+          {activities.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                Linked activities
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {activities.map((a) => (
+                  <LinkChip
+                    active={activityIds.has(a.id)}
+                    key={a.id}
+                    label={a.name}
+                    onToggle={() => toggleLink("activity", a.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {awards.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                Linked awards
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {awards.map((a) => (
+                  <LinkChip
+                    active={awardIds.has(a.id)}
+                    key={a.id}
+                    label={a.name}
+                    onToggle={() => toggleLink("award", a.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {activities.length === 0 && awards.length === 0 && (
+            <p className="text-xs text-[color:var(--almanac-ink-soft)]">
+              Add activities or awards from the Dashboard to link them here.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {linkedTags.map((t) => (
+            <span
+              className="rounded-full bg-[color:var(--almanac-ink)]/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-[color:var(--almanac-ink)]"
+              key={t.id}
+            >
+              {t.name}
+            </span>
+          ))}
+          <button
+            className="text-xs font-medium text-[color:var(--almanac-olive)] transition hover:opacity-80"
+            onClick={() => setExpanded(true)}
+            type="button"
+          >
+            {linkedTags.length ? "Read & edit links" : "Read full session"}
+          </button>
+        </div>
       )}
     </article>
   );

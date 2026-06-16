@@ -58,6 +58,8 @@ export default async function DashboardPage({
     collegeList,
     guidedSessions,
     weeklyChallenges,
+    noteActivities,
+    noteAwards,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -128,7 +130,29 @@ export default async function DashboardPage({
       .order("week_start_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(60),
+    supabase.from("note_activities").select("note_id,activity_id"),
+    supabase.from("note_awards").select("note_id,award_id"),
   ]);
+
+  // Group the note↔activity / note↔award join rows so each note carries the
+  // full set of entries it links to (many-to-many), not just its primary FK.
+  const noteActivityMap = new Map<string, string[]>();
+  for (const row of (noteActivities.data ?? []) as { note_id: string; activity_id: string }[]) {
+    const list = noteActivityMap.get(row.note_id) ?? [];
+    list.push(row.activity_id);
+    noteActivityMap.set(row.note_id, list);
+  }
+  const noteAwardMap = new Map<string, string[]>();
+  for (const row of (noteAwards.data ?? []) as { note_id: string; award_id: string }[]) {
+    const list = noteAwardMap.get(row.note_id) ?? [];
+    list.push(row.award_id);
+    noteAwardMap.set(row.note_id, list);
+  }
+  const notesWithLinks = ((notes.data ?? []) as Note[]).map((n) => ({
+    ...n,
+    activityIds: noteActivityMap.get(n.id) ?? (n.activity_id ? [n.activity_id] : []),
+    awardIds: noteAwardMap.get(n.id) ?? (n.award_id ? [n.award_id] : []),
+  }));
 
   return (
     <AlmanacWorkspace
@@ -137,7 +161,7 @@ export default async function DashboardPage({
       collegeList={(collegeList.data ?? []) as CollegeListEntry[]}
       goals={(goals.data ?? []) as Goal[]}
       guidedSessions={(guidedSessions.data ?? []) as GuidedSession[]}
-      notes={(notes.data ?? []) as Note[]}
+      notes={notesWithLinks}
       profile={(profile.data ?? null) as ProfilePreferences | null}
       studentMemories={(studentMemories.data ?? []) as StudentMemory[]}
       studentProfile={(studentProfile.data ?? null) as StudentAdmissionsProfile | null}
