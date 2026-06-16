@@ -66,12 +66,12 @@ const sessionTypes = [
   },
   {
     id: "deepen-activity",
-    label: "Deepen Current Activity",
-    focus: "Move an existing activity from participation to measurable impact.",
-    // Opener is dynamically replaced with the chosen activity's name in the parent.
-    opener: "Which activity do you want to deepen?",
+    label: "Deepen Activity or Award",
+    focus: "Turn an existing activity or award into a stronger, higher-impact entry.",
+    // Opener is dynamically replaced with the chosen entry's name in the parent.
+    opener: "Which activity or award do you want to deepen?",
     prompts: [
-      "What's the most measurable change you've made in this activity?",
+      "What's the most measurable change you've made here?",
       "Where could this go in the next six months?",
     ],
   },
