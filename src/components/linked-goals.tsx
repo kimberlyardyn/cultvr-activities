@@ -128,16 +128,9 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
 
       {open && (
         <div className="mt-3 space-y-2">
-          {goals.length === 0 && !adding && (
+          {goals.length === 0 && !adding && readonly && (
             <div className="rounded-lg border border-dashed border-[color:var(--almanac-rule)] bg-white/40 px-3 py-3 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
-              No goals yet.{" "}
-              {readonly ? (
-                <>Set a forward-looking target on your own activities and awards.</>
-              ) : (
-                <>
-                  Click <strong className="text-[color:var(--almanac-ink)]">+ Add goal</strong> above to set a forward-looking target — e.g. <em>&quot;Be elected club president&quot;</em> by May 2028.
-                </>
-              )}
+              No goals yet. Set a forward-looking target on your own activities and awards.
             </div>
           )}
 
