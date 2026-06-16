@@ -669,7 +669,7 @@ export function ReorderGutter({
       >
         <ArrowUp size={14} strokeWidth={2.4} />
       </button>
-      <span className="flex size-7 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] bg-white/60 font-mono text-[0.7rem] font-semibold text-[color:var(--almanac-ink)]">
+      <span className="flex size-7 items-center justify-center font-mono text-[0.7rem] font-semibold text-[color:var(--almanac-ink)]">
         {rank}
       </span>
       <button
