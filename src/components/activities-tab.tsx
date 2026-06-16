@@ -265,6 +265,9 @@ export function ActivitiesTab({
   const [editing, setEditing] = useState<{ draft: ActivityDraft; voiceFirst: boolean } | null>(null);
   const [importing, setImporting] = useState(false);
   const [bulkExporting, setBulkExporting] = useState(false);
+  const [sortBy, setSortBy] = useState<"manual" | "recent" | "category" | "hours">("manual");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [, startTransition] = useTransition();
 
   const handleDelete = useCallback((id: string) => {
@@ -293,6 +296,40 @@ export function ActivitiesTab({
   );
 
   const isEmpty = activities.length === 0;
+
+  // Distinct categories for the filter dropdown.
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of activities) if (a.category) set.add(a.category);
+    return Array.from(set).sort((x, y) => x.localeCompare(y));
+  }, [activities]);
+
+  // Manual drag-style reordering only makes sense in the unsorted, unfiltered
+  // view (otherwise the up/down arrows would act on a derived order).
+  const reorderable = sortBy === "manual" && categoryFilter === "all";
+
+  const visibleActivities = useMemo(() => {
+    const list =
+      categoryFilter === "all"
+        ? activities
+        : activities.filter((a) => (a.category || "") === categoryFilter);
+    if (sortBy === "manual") return list;
+    const sorted = [...list];
+    if (sortBy === "recent") {
+      const key = (a: Activity) =>
+        a.in_progress ? "9999-99-99" : a.end_date || a.start_date || "0000-00-00";
+      sorted.sort((a, b) => key(b).localeCompare(key(a)));
+    } else if (sortBy === "category") {
+      sorted.sort(
+        (a, b) => (a.category || "~").localeCompare(b.category || "~") || a.name.localeCompare(b.name),
+      );
+    } else if (sortBy === "hours") {
+      sorted.sort(
+        (a, b) => b.hours_per_week - a.hours_per_week || b.weeks_per_year - a.weeks_per_year,
+      );
+    }
+    return sorted;
+  }, [activities, categoryFilter, sortBy]);
 
   // Synthesize sample Activities for display only — they have synthetic ids
   // and never write to the database. They disappear the moment the student
@@ -396,22 +433,90 @@ export function ActivitiesTab({
           </div>
         </section>
       ) : (
-        <div className="grid gap-3">
-          {activities.map((a, idx) => (
-            <ActivityCard
-              key={a.id}
-              activity={a}
-              rank={idx + 1}
-              notes={notes.filter((n) => noteLinkedTo(n, "activity", a.id))}
-              goals={goals.filter((g) => g.activity_id === a.id)}
-              onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
-              onDelete={() => handleDelete(a.id)}
-              allNotes={notes}
-              onMoveUp={idx > 0 ? () => handleReorder(idx, -1) : undefined}
-              onMoveDown={idx < activities.length - 1 ? () => handleReorder(idx, 1) : undefined}
-            />
-          ))}
-        </div>
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+              Sort
+              <select
+                className="rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none transition hover:bg-white focus:border-[color:var(--almanac-olive)]"
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                value={sortBy}
+              >
+                <option value="manual">Manual order</option>
+                <option value="recent">Most recent</option>
+                <option value="category">Category</option>
+                <option value="hours">Hours / week</option>
+              </select>
+            </label>
+            {categories.length > 0 && (
+              <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
+                Category
+                <select
+                  className="rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs text-[color:var(--almanac-ink)] outline-none transition hover:bg-white focus:border-[color:var(--almanac-olive)]"
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  value={categoryFilter}
+                >
+                  <option value="all">All</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="ml-auto inline-flex items-center gap-2">
+              <span className="text-xs text-[color:var(--almanac-ink-soft)]">
+                {visibleActivities.length} of {activities.length}
+              </span>
+              <div className="inline-flex rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-0.5">
+                {(["comfortable", "compact"] as const).map((d) => (
+                  <button
+                    className={[
+                      "rounded-full px-3 py-1 text-xs font-medium transition",
+                      density === d
+                        ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
+                        : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
+                    ].join(" ")}
+                    key={d}
+                    onClick={() => setDensity(d)}
+                    type="button"
+                  >
+                    {d === "comfortable" ? "Comfortable" : "Compact"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {visibleActivities.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-6 text-center text-sm text-[color:var(--almanac-ink-soft)]">
+              No activities match this filter.
+            </div>
+          ) : (
+            <div className={density === "compact" ? "grid gap-2" : "grid gap-3"}>
+              {visibleActivities.map((a, idx) => (
+                <ActivityCard
+                  key={a.id}
+                  activity={a}
+                  compact={density === "compact"}
+                  rank={reorderable ? idx + 1 : undefined}
+                  notes={notes.filter((n) => noteLinkedTo(n, "activity", a.id))}
+                  goals={goals.filter((g) => g.activity_id === a.id)}
+                  onEdit={() => setEditing({ draft: toDraft(a), voiceFirst: false })}
+                  onDelete={() => handleDelete(a.id)}
+                  allNotes={notes}
+                  onMoveUp={reorderable && idx > 0 ? () => handleReorder(idx, -1) : undefined}
+                  onMoveDown={
+                    reorderable && idx < visibleActivities.length - 1
+                      ? () => handleReorder(idx, 1)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {editing && (
@@ -457,6 +562,7 @@ function ActivityCard({
   onDelete,
   allNotes,
   isSample = false,
+  compact = false,
   onMoveUp,
   onMoveDown,
   rank,
@@ -468,6 +574,7 @@ function ActivityCard({
   onDelete: () => void;
   allNotes: Note[];
   isSample?: boolean;
+  compact?: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   rank?: number;
@@ -492,7 +599,8 @@ function ActivityCard({
   return (
     <article
       className={[
-        "flex gap-3 rounded-2xl border p-4 transition",
+        "flex gap-3 rounded-2xl border transition",
+        compact ? "p-2.5" : "p-4",
         isSample
           ? "border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)]/60"
           : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]",
@@ -530,8 +638,8 @@ function ActivityCard({
             {[activity.position, activity.category].filter(Boolean).join(" · ") || "—"}
           </p>
           {/* Collapsed: surface a couple of key facts so the list is scannable
-              without expanding every card. */}
-          {!expanded && (dateRange || time) && (
+              without expanding every card. Hidden in compact mode for density. */}
+          {!expanded && !compact && (dateRange || time) && (
             <p className="mt-0.5 pl-[24px] text-xs text-[color:var(--almanac-ink-soft)]">
               {[dateRange, time].filter(Boolean).join("  ·  ")}
             </p>
