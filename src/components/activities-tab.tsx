@@ -473,6 +473,10 @@ function ActivityCard({
   rank?: number;
 }) {
   const [showTagging, setShowTagging] = useState(false);
+  // When an activity has no goals and no tagged posts yet, the three empty
+  // sub-sections read as repetitive "(0)" noise — so we collapse them into one
+  // friendly nudge until the student opts to expand them.
+  const [showBareSections, setShowBareSections] = useState(false);
   // Collapsed by default so the dashboard stays scannable — name + position
   // only, with the rest (description, dates, tags, goals…) behind a click.
   // Sample cards start open so the template preview is visible.
@@ -591,34 +595,73 @@ function ActivityCard({
         </div>
       )}
 
-      <LinkedGoals
-        parentId={activity.id}
-        parentKind="activity"
-        goals={goals}
-        readonly={isSample}
-      />
+      {!isSample && goals.length === 0 && notes.length === 0 && !showBareSections ? (
+        <div className="mt-4 rounded-xl border border-dashed border-[color:var(--almanac-rule)] bg-white/40 px-4 py-3">
+          <p className="text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+            <Sparkles className="mr-1 inline align-[-2px]" size={13} />
+            This activity is a bit bare — add goals, tags, or deepen it to build the story.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              className="inline-flex items-center gap-1 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
+              onClick={() => setShowBareSections(true)}
+              type="button"
+            >
+              <Plus size={12} /> Add goals
+            </button>
+            <button
+              className="inline-flex items-center gap-1 rounded-full border border-[color:var(--almanac-rule)] bg-white/60 px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-white"
+              onClick={() => {
+                setShowBareSections(true);
+                setShowTagging(true);
+              }}
+              type="button"
+            >
+              <Plus size={12} /> Tag a post
+            </button>
+            {activity.id && (
+              <button
+                className="inline-flex items-center gap-1 rounded-full bg-[color:var(--almanac-olive)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                onClick={() => startDeepenSession(activity.id)}
+                type="button"
+              >
+                Deepen this activity →
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <LinkedGoals
+            parentId={activity.id}
+            parentKind="activity"
+            goals={goals}
+            readonly={isSample}
+          />
 
-      {!isSample && (
-        <TaggedPosts
-          activityId={activity.id}
-          notes={notes}
-          allNotes={allNotes}
-          show={showTagging}
-          onToggle={() => setShowTagging(!showTagging)}
-        />
-      )}
+          {!isSample && (
+            <TaggedPosts
+              activityId={activity.id}
+              notes={notes}
+              allNotes={allNotes}
+              show={showTagging}
+              onToggle={() => setShowTagging(!showTagging)}
+            />
+          )}
 
-      {!isSample && activity.id && (
-        <p className="mt-4 border-t border-[color:var(--almanac-rule)] pt-3 text-sm text-[color:var(--almanac-ink-soft)]">
-          Need help fleshing out the details or making this more in-depth?{" "}
-          <button
-            className="font-medium text-[color:var(--almanac-olive)] underline-offset-2 transition hover:underline"
-            onClick={() => startDeepenSession(activity.id)}
-            type="button"
-          >
-            Deepen this activity →
-          </button>
-        </p>
+          {!isSample && activity.id && (
+            <p className="mt-4 border-t border-[color:var(--almanac-rule)] pt-3 text-sm text-[color:var(--almanac-ink-soft)]">
+              Need help fleshing out the details or making this more in-depth?{" "}
+              <button
+                className="font-medium text-[color:var(--almanac-olive)] underline-offset-2 transition hover:underline"
+                onClick={() => startDeepenSession(activity.id)}
+                type="button"
+              >
+                Deepen this activity →
+              </button>
+            </p>
+          )}
+        </>
       )}
        </>
       )}
