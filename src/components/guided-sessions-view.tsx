@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Mic, Pencil, Square, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic, Pencil, Square, Trash2 } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -240,6 +240,8 @@ export function GuidedSessionsView({
   const [transcript, setTranscript] = useState("");
   const [typedEntry, setTypedEntry] = useState("");
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [selectedAwardId, setSelectedAwardId] = useState<string | null>(null);
+  const [deepenKind, setDeepenKind] = useState<"activity" | "award">("activity");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSuggestions, setChatSuggestions] = useState<string[]>([]);
@@ -305,10 +307,19 @@ export function GuidedSessionsView({
     buildSessionSummary(selected, answers, transcript),
   );
 
-  // "Deepen Current Activity" requires choosing an activity before the session.
+  // "Deepen Current Activity" requires choosing an activity or award first.
   const needsActivity = selected.id === "deepen-activity";
-  const chosenActivity = activities.find((a) => a.id === selectedActivityId) ?? null;
-  const activityReady = !needsActivity || Boolean(chosenActivity);
+  const chosenActivity =
+    deepenKind === "activity" ? activities.find((a) => a.id === selectedActivityId) ?? null : null;
+  const chosenAward =
+    deepenKind === "award" ? awards.find((a) => a.id === selectedAwardId) ?? null : null;
+  // Normalized view of whichever entry the student picked to deepen.
+  const deepenTarget = chosenActivity
+    ? { kind: "activity" as const, id: chosenActivity.id, name: chosenActivity.name }
+    : chosenAward
+      ? { kind: "award" as const, id: chosenAward.id, name: chosenAward.name }
+      : null;
+  const activityReady = !needsActivity || Boolean(deepenTarget);
   const deepenContext = chosenActivity
     ? [
         `Activity: ${chosenActivity.name}`,
@@ -317,7 +328,16 @@ export function GuidedSessionsView({
       ]
         .filter(Boolean)
         .join(". ")
-    : "";
+    : chosenAward
+      ? [
+          `Award: ${chosenAward.name}`,
+          chosenAward.level ? `Level: ${chosenAward.level}` : "",
+          chosenAward.organization ? `Organization: ${chosenAward.organization}` : "",
+          chosenAward.description ? `Current description: ${chosenAward.description}` : "",
+        ]
+          .filter(Boolean)
+          .join(". ")
+      : "";
   // What the AI actually receives: prefer a session's richer behavior script
   // over the short display `focus`. Voice mode uses `aiGuidanceVoice` when
   // present (voice has no clickable chips, so it must ASK options aloud);
@@ -329,13 +349,15 @@ export function GuidedSessionsView({
     (interactionMode === "voice" ? voiceGuidance ?? textGuidance : textGuidance) ??
     selected.focus;
   const effectiveFocus = (
-    needsActivity && chosenActivity ? `${baseFocus} ${deepenContext}.` : baseFocus
+    needsActivity && deepenTarget ? `${baseFocus} ${deepenContext}.` : baseFocus
   ).slice(0, 600);
   // One warm, single-question opener for both voice and text. The deepen
-  // session weaves in the chosen activity name so the question is personalized.
+  // session weaves in the chosen entry's name so the question is personalized.
   const opener =
-    needsActivity && chosenActivity
-      ? `In what ways do you want to expand your involvement in ${chosenActivity.name}?`
+    needsActivity && deepenTarget
+      ? deepenTarget.kind === "award"
+        ? `In what ways do you want to build on your ${deepenTarget.name}?`
+        : `In what ways do you want to expand your involvement in ${deepenTarget.name}?`
       : selected.opener;
   const voiceOpener = opener;
   const textOpener = opener;
@@ -543,6 +565,8 @@ export function GuidedSessionsView({
     setTranscript("");
     setTypedEntry("");
     setSelectedActivityId(null);
+    setSelectedAwardId(null);
+    setDeepenKind("activity");
     setChatMessages([]);
     setChatLoading(false);
     setChatSuggestions([]);
@@ -695,14 +719,24 @@ export function GuidedSessionsView({
               {needsActivity ? (
                 <ActivityPicker
                   activities={activities}
-                  onSelect={setSelectedActivityId}
-                  selectedId={selectedActivityId}
+                  awards={awards}
+                  onSelectActivity={(id) => {
+                    setDeepenKind("activity");
+                    setSelectedActivityId(id);
+                    setSelectedAwardId(null);
+                  }}
+                  onSelectAward={(id) => {
+                    setDeepenKind("award");
+                    setSelectedAwardId(id);
+                    setSelectedActivityId(null);
+                  }}
+                  selectedId={deepenTarget?.id ?? null}
                 />
               ) : null}
 
               {!activityReady ? null : interactionMode === "voice" ? (
                 <VoicePanel
-                  key={`${selected.id}:${selectedActivityId ?? ""}`}
+                  key={`${selected.id}:${deepenTarget?.id ?? ""}`}
                   currentPrompt={voiceOpener}
                   onTranscript={appendVoiceTranscript}
                   onReview={goToReview}
@@ -944,6 +978,7 @@ function GuidedNotesPreview({ notes }: { notes: Note[] }) {
 
 function HistoryNoteCard({ note }: { note: Note }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [pending, startTransition] = useTransition();
@@ -1048,57 +1083,122 @@ function HistoryNoteCard({ note }: { note: Note }) {
           </button>
         </div>
       </div>
-      <h3 className="mt-1 font-serif text-xl leading-tight">{note.title}</h3>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
+      <button
+        aria-expanded={expanded}
+        className="mt-1 flex w-full items-start justify-between gap-3 text-left"
+        onClick={() => setExpanded((v) => !v)}
+        type="button"
+      >
+        <h3 className="font-serif text-xl leading-tight">{note.title}</h3>
+        <ChevronDown
+          className={`mt-1 shrink-0 text-[color:var(--almanac-ink-soft)] transition ${expanded ? "rotate-180" : ""}`}
+          size={16}
+        />
+      </button>
+      <p
+        className={`mt-2 whitespace-pre-wrap text-sm leading-6 text-[color:var(--almanac-ink-soft)] ${expanded ? "" : "line-clamp-2"}`}
+      >
         {note.body}
       </p>
+      {!expanded && (
+        <button
+          className="mt-2 text-xs font-medium text-[color:var(--almanac-olive)] transition hover:opacity-80"
+          onClick={() => setExpanded(true)}
+          type="button"
+        >
+          Read full session
+        </button>
+      )}
     </article>
   );
 }
 
 function ActivityPicker({
   activities,
-  onSelect,
+  awards,
+  onSelectActivity,
+  onSelectAward,
   selectedId,
 }: {
   activities: Activity[];
-  onSelect: (id: string) => void;
+  awards: Award[];
+  onSelectActivity: (id: string) => void;
+  onSelectAward: (id: string) => void;
   selectedId: string | null;
 }) {
+  const cardClass = (active: boolean) =>
+    [
+      "rounded-xl border p-3 text-left transition",
+      active
+        ? "border-[color:var(--almanac-ink)] bg-[color:var(--almanac-paper-deep)]"
+        : "border-[color:var(--almanac-rule)] hover:bg-[color:var(--almanac-paper-deep)]",
+    ].join(" ");
+
   return (
     <section className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 md:p-6">
       <SectionKicker>Step 1</SectionKicker>
       <h3 className="mt-2 font-serif text-2xl leading-tight">
-        Which activity do you want to deepen?
+        Which activity or award do you want to deepen?
       </h3>
-      {activities.length ? (
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {activities.map((a) => {
-            const active = a.id === selectedId;
-            return (
-              <button
-                className={[
-                  "rounded-xl border p-3 text-left transition",
-                  active
-                    ? "border-[color:var(--almanac-ink)] bg-[color:var(--almanac-paper-deep)]"
-                    : "border-[color:var(--almanac-rule)] hover:bg-[color:var(--almanac-paper-deep)]",
-                ].join(" ")}
-                key={a.id}
-                onClick={() => onSelect(a.id)}
-                type="button"
-              >
-                <p className="font-medium leading-tight text-[color:var(--almanac-ink)]">
-                  {a.name}
-                </p>
-                {a.role ? (
-                  <p className="mt-0.5 text-xs text-[color:var(--almanac-ink-soft)]">{a.role}</p>
-                ) : null}
-              </button>
-            );
-          })}
+      {activities.length || awards.length ? (
+        <div className="mt-4 space-y-5">
+          {activities.length ? (
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                Activities
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {activities.map((a) => (
+                  <button
+                    className={cardClass(a.id === selectedId)}
+                    key={a.id}
+                    onClick={() => onSelectActivity(a.id)}
+                    type="button"
+                  >
+                    <p className="font-medium leading-tight text-[color:var(--almanac-ink)]">
+                      {a.name}
+                    </p>
+                    {a.role ? (
+                      <p className="mt-0.5 text-xs text-[color:var(--almanac-ink-soft)]">{a.role}</p>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {awards.length ? (
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                Awards
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {awards.map((a) => {
+                  const subtitle = [a.level, a.organization].filter(Boolean).join(" · ");
+                  return (
+                    <button
+                      className={cardClass(a.id === selectedId)}
+                      key={a.id}
+                      onClick={() => onSelectAward(a.id)}
+                      type="button"
+                    >
+                      <p className="font-medium leading-tight text-[color:var(--almanac-ink)]">
+                        {a.name}
+                      </p>
+                      {subtitle ? (
+                        <p className="mt-0.5 text-xs text-[color:var(--almanac-ink-soft)]">
+                          {subtitle}
+                        </p>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
-        <Empty label="No activities yet. Add one from Dashboard → Activities first, then come back to deepen it." />
+        <Empty label="No activities or awards yet. Add one from the Dashboard first, then come back to deepen it." />
       )}
     </section>
   );
