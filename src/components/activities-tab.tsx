@@ -327,7 +327,7 @@ export function ActivitiesTab({
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl leading-tight text-[color:var(--almanac-ink)] md:text-3xl">
-            Your activities & experiences
+            Activities and Experiences
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
             Build the record once, then export it as a Common App, UC, or resume line.
