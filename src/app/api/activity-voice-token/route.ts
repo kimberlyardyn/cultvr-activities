@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { env, hasOpenAIEnv } from "@/lib/env";
+import { env, hasOpenAIEnv, hasSupabaseEnv } from "@/lib/env";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Mints an ephemeral OpenAI Realtime token specifically for the activity-entry
@@ -14,6 +15,17 @@ export async function POST() {
       { error: "OPENAI_API_KEY is not configured." },
       { status: 500 },
     );
+  }
+
+  // Gate behind auth so anonymous callers can't mint Realtime tokens on our key.
+  if (hasSupabaseEnv()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const response = await fetch(

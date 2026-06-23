@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { env, hasOpenAIEnv } from "@/lib/env";
+import { env, hasOpenAIEnv, hasSupabaseEnv } from "@/lib/env";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,17 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   if (!hasOpenAIEnv()) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 500 });
+  }
+
+  // Gate behind auth so the OpenAI key can't be spent by anonymous callers.
+  if (hasSupabaseEnv()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const form = await request.formData();
