@@ -175,7 +175,6 @@ export function AwardsTab({
   const [importing, setImporting] = useState(false);
   const [sortBy, setSortBy] = useState<"manual" | "recent" | "level" | "name">("manual");
   const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [, startTransition] = useTransition();
 
   const isEmpty = awards.length === 0;
@@ -362,23 +361,6 @@ export function AwardsTab({
               <span className="text-xs text-[color:var(--almanac-ink-soft)]">
                 {visibleAwards.length} of {awards.length}
               </span>
-              <div className="inline-flex rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-0.5">
-                {(["comfortable", "compact"] as const).map((d) => (
-                  <button
-                    className={[
-                      "rounded-full px-3 py-1 text-xs font-medium transition",
-                      density === d
-                        ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
-                        : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
-                    ].join(" ")}
-                    key={d}
-                    onClick={() => setDensity(d)}
-                    type="button"
-                  >
-                    {d === "comfortable" ? "Comfortable" : "Compact"}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -387,12 +369,12 @@ export function AwardsTab({
               No awards match this filter.
             </div>
           ) : (
-            <div className={density === "compact" ? "grid gap-2" : "grid gap-3"}>
+            <div className="grid gap-2">
               {visibleAwards.map((a, idx) => (
                 <AwardCard
                   key={a.id}
                   award={a}
-                  compact={density === "compact"}
+                  compact
                   rank={reorderable ? idx + 1 : undefined}
                   activities={activities}
                   goals={goals.filter((g) => g.award_id === a.id)}
