@@ -267,7 +267,6 @@ export function ActivitiesTab({
   const [bulkExporting, setBulkExporting] = useState(false);
   const [sortBy, setSortBy] = useState<"manual" | "recent" | "category" | "hours">("manual");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [, startTransition] = useTransition();
 
   const handleDelete = useCallback((id: string) => {
@@ -469,23 +468,6 @@ export function ActivitiesTab({
               <span className="text-xs text-[color:var(--almanac-ink-soft)]">
                 {visibleActivities.length} of {activities.length}
               </span>
-              <div className="inline-flex rounded-full border border-[color:var(--almanac-rule)] bg-white/60 p-0.5">
-                {(["comfortable", "compact"] as const).map((d) => (
-                  <button
-                    className={[
-                      "rounded-full px-3 py-1 text-xs font-medium transition",
-                      density === d
-                        ? "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)]"
-                        : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
-                    ].join(" ")}
-                    key={d}
-                    onClick={() => setDensity(d)}
-                    type="button"
-                  >
-                    {d === "comfortable" ? "Comfortable" : "Compact"}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -494,12 +476,12 @@ export function ActivitiesTab({
               No activities match this filter.
             </div>
           ) : (
-            <div className={density === "compact" ? "grid gap-2" : "grid gap-3"}>
+            <div className="grid gap-2">
               {visibleActivities.map((a, idx) => (
                 <ActivityCard
                   key={a.id}
                   activity={a}
-                  compact={density === "compact"}
+                  compact
                   rank={reorderable ? idx + 1 : undefined}
                   notes={notes.filter((n) => noteLinkedTo(n, "activity", a.id))}
                   goals={goals.filter((g) => g.activity_id === a.id)}
