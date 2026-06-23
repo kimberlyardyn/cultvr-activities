@@ -74,8 +74,8 @@ const CATEGORIES: CategoryDef[] = [
     blurb: "Make your work visible and the story behind it clear.",
     prompts: [
       "Choose one way to make your progress more visible (portfolio, vlog, writing).",
-      "Strengthen the narrative behind why you do this activity.",
-      "Identify what this activity demonstrates about you — and reinforce it.",
+      "Strengthen the narrative behind why you do a certain activity (______).",
+      "Identify what a certain activity (______) demonstrates about you — and reinforce it.",
       "Identify one new award, honor, or recognition you want to add to your profile.",
     ],
   },
