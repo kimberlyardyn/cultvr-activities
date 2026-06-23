@@ -291,7 +291,7 @@ export function DiscoverView() {
 
       {/* Tab strip */}
       <div className="overflow-x-auto px-5 pt-4 md:px-9">
-        <div className="inline-flex max-w-full gap-1 rounded-full border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-1">
+        <div className="inline-flex max-w-full gap-2">
           {TABS.map((t) => {
             const active = t.id === activeTab;
             const Icon = t.icon;
@@ -341,7 +341,7 @@ export function DiscoverView() {
                 </h3>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {section.resources.map((r) => (
-                    <ResourceCard accent={tab.color} key={r.url} resource={r} />
+                    <ResourceCard key={r.url} resource={r} />
                   ))}
                 </div>
               </div>
@@ -350,7 +350,7 @@ export function DiscoverView() {
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(tab.resources ?? []).map((r) => (
-              <ResourceCard accent={tab.color} key={r.url} resource={r} />
+              <ResourceCard key={r.url} resource={r} />
             ))}
           </div>
         )}
@@ -359,13 +359,7 @@ export function DiscoverView() {
   );
 }
 
-function ResourceCard({
-  resource,
-  accent,
-}: {
-  resource: Resource;
-  accent: string;
-}) {
+function ResourceCard({ resource }: { resource: Resource }) {
   return (
     <a
       className="group flex flex-col gap-2 rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-5 transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(31,36,51,0.08)]"
@@ -387,21 +381,10 @@ function ResourceCard({
         {resource.description}
       </p>
 
-      <footer className="mt-1 flex items-center justify-between">
+      <footer className="mt-1">
         <span className="truncate text-[0.7rem] text-[color:var(--almanac-ink-soft)]">
           {hostname(resource.url)}
         </span>
-        {resource.badge && (
-          <span
-            className="rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.15em]"
-            style={{
-              color: accent,
-              backgroundColor: `${accent}1A`, // 10% alpha
-            }}
-          >
-            {resource.badge}
-          </span>
-        )}
       </footer>
     </a>
   );
