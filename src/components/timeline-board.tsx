@@ -84,6 +84,7 @@ export function TimelineBoard({
 }: Props) {
   const [fromDate, setFromDate] = useState(""); // YYYY-MM-DD
   const [toDate, setToDate] = useState("");
+  const [query, setQuery] = useState(""); // free-text keyword filter
   const [editing, setEditing] = useState<TimelineItem | null>(null);
   const [, startTransition] = useTransition();
 
@@ -196,7 +197,19 @@ export function TimelineBoard({
       return true;
     };
 
-    const filtered = all.filter((item) => inRange(item.date));
+    const q = query.trim().toLowerCase();
+    const matchesQuery = (item: TimelineItem) => {
+      if (!q) return true;
+      return (
+        item.title.toLowerCase().includes(q) ||
+        (item.summary ?? "").toLowerCase().includes(q) ||
+        item.label.toLowerCase().includes(q)
+      );
+    };
+
+    const filtered = all.filter(
+      (item) => inRange(item.date) && matchesQuery(item),
+    );
 
     // Bucket by calendar day (local time). Within a bucket, sort by timestamp desc.
     const map = new Map<string, TimelineItem[]>();
@@ -214,7 +227,7 @@ export function TimelineBoard({
     return Array.from(map.entries()).sort(([a], [b]) =>
       a < b ? 1 : a > b ? -1 : 0,
     );
-  }, [activities, awards, notes, goals, weeklyChallenges, fromDate, toDate]);
+  }, [activities, awards, notes, goals, weeklyChallenges, fromDate, toDate, query]);
 
   const handleDelete = useCallback((item: TimelineItem) => {
     if (!item.editable) return;
@@ -313,36 +326,53 @@ export function TimelineBoard({
   return (
     <div className="px-5 py-6 md:px-9">
       {/* Toolbar */}
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3 print:hidden">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-              From
+      <div className="mb-5 flex flex-col gap-3 print:hidden md:flex-row md:flex-wrap md:items-end md:justify-between">
+        <div className="flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:items-end md:justify-start">
+          {/* Keyword search */}
+          <div className="w-full max-w-xs md:w-60">
+            <label className="block text-center text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)] md:text-left">
+              Search
             </label>
             <input
-              className="mt-0.5 rounded-md border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-2.5 py-1.5 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => setFromDate(e.target.value)}
-              type="date"
-              value={fromDate}
+              className="mt-0.5 w-full rounded-md border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-2.5 py-1.5 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by keyword…"
+              type="search"
+              value={query}
             />
           </div>
-          <div>
-            <label className="block text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-              To
-            </label>
-            <input
-              className="mt-0.5 rounded-md border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-2.5 py-1.5 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
-              onChange={(e) => setToDate(e.target.value)}
-              type="date"
-              value={toDate}
-            />
+          {/* Date range — centered group on mobile */}
+          <div className="flex items-end justify-center gap-3">
+            <div>
+              <label className="block text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
+                From
+              </label>
+              <input
+                className="mt-0.5 rounded-md border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-2.5 py-1.5 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => setFromDate(e.target.value)}
+                type="date"
+                value={fromDate}
+              />
+            </div>
+            <div>
+              <label className="block text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
+                To
+              </label>
+              <input
+                className="mt-0.5 rounded-md border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-2.5 py-1.5 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[#3F4A66]"
+                onChange={(e) => setToDate(e.target.value)}
+                type="date"
+                value={toDate}
+              />
+            </div>
           </div>
-          {(fromDate || toDate) && (
+          {(fromDate || toDate || query) && (
             <button
-              className="mb-0.5 rounded-md px-2 py-1 text-xs text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)]"
+              className="rounded-md px-2 py-1 text-xs text-[color:var(--almanac-ink-soft)] underline hover:text-[color:var(--almanac-ink)] md:mb-0.5"
               onClick={() => {
                 setFromDate("");
                 setToDate("");
+                setQuery("");
               }}
               type="button"
             >
@@ -352,7 +382,7 @@ export function TimelineBoard({
         </div>
 
         <button
-          className="inline-flex items-center gap-2 rounded-full bg-[color:var(--almanac-ink)] px-4 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 self-center rounded-full bg-[color:var(--almanac-ink)] px-4 py-2 text-sm font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 md:self-auto"
           onClick={handlePrint}
           type="button"
         >
@@ -389,7 +419,9 @@ export function TimelineBoard({
 
         {totalCount === 0 ? (
           <p className="py-10 text-center text-sm text-[color:var(--almanac-ink-soft)]">
-            Nothing here yet. Add an activity, award, note, or challenge — and it will appear on your timeline automatically.
+            {query || fromDate || toDate
+              ? "No entries match your search. Try a different keyword or date range."
+              : "Nothing here yet. Add an activity, award, note, or challenge — and it will appear on your timeline automatically."}
           </p>
         ) : (
           <div className="flex gap-4">
