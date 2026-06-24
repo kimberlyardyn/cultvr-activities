@@ -1008,6 +1008,7 @@ function HistoryNoteCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [editingLinks, setEditingLinks] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [pending, startTransition] = useTransition();
@@ -1120,12 +1121,11 @@ function HistoryNoteCard({
     );
   }
 
-  // Names of the currently-linked activities/awards, shown as read-only pills
-  // when the card is collapsed.
-  const linkedTags = [
-    ...activities.filter((a) => activityIds.has(a.id)),
-    ...awards.filter((a) => awardIds.has(a.id)),
-  ];
+  // The activities/awards this session is actually linked to. Only these show
+  // as tags — the full picker is opt-in via the "Add / Edit links" button.
+  const linkedActivities = activities.filter((a) => activityIds.has(a.id));
+  const linkedAwards = awards.filter((a) => awardIds.has(a.id));
+  const linkedTags = [...linkedActivities, ...linkedAwards];
 
   return (
     <article className="group rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
@@ -1173,44 +1173,103 @@ function HistoryNoteCard({
 
       {expanded ? (
         <div className="mt-3 space-y-3 border-t border-[color:var(--almanac-rule)] pt-3">
-          {activities.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
-                Linked activities
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {activities.map((a) => (
-                  <LinkChip
-                    active={activityIds.has(a.id)}
-                    key={a.id}
-                    label={a.name}
-                    onToggle={() => toggleLink("activity", a.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {awards.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
-                Linked awards
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {awards.map((a) => (
-                  <LinkChip
-                    active={awardIds.has(a.id)}
-                    key={a.id}
-                    label={a.name}
-                    onToggle={() => toggleLink("award", a.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {activities.length === 0 && awards.length === 0 && (
+          {activities.length === 0 && awards.length === 0 ? (
             <p className="text-xs text-[color:var(--almanac-ink-soft)]">
               Add activities or awards from the Dashboard to link them here.
             </p>
+          ) : editingLinks ? (
+            <>
+              {activities.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                    Link activities
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activities.map((a) => (
+                      <LinkChip
+                        active={activityIds.has(a.id)}
+                        key={a.id}
+                        label={a.name}
+                        onToggle={() => toggleLink("activity", a.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {awards.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                    Link awards
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {awards.map((a) => (
+                      <LinkChip
+                        active={awardIds.has(a.id)}
+                        key={a.id}
+                        label={a.name}
+                        onToggle={() => toggleLink("award", a.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                className="text-xs font-medium text-[color:var(--almanac-olive)] transition hover:opacity-80"
+                onClick={() => setEditingLinks(false)}
+                type="button"
+              >
+                Done
+              </button>
+            </>
+          ) : (
+            <>
+              {linkedActivities.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                    Linked activities
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {linkedActivities.map((a) => (
+                      <LinkChip
+                        active
+                        key={a.id}
+                        label={a.name}
+                        onToggle={() => toggleLink("activity", a.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {linkedAwards.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
+                    Linked awards
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {linkedAwards.map((a) => (
+                      <LinkChip
+                        active
+                        key={a.id}
+                        label={a.name}
+                        onToggle={() => toggleLink("award", a.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {linkedActivities.length === 0 && linkedAwards.length === 0 && (
+                <p className="text-xs text-[color:var(--almanac-ink-soft)]">
+                  No activities or awards linked to this session.
+                </p>
+              )}
+              <button
+                className="text-xs font-medium text-[color:var(--almanac-olive)] transition hover:opacity-80"
+                onClick={() => setEditingLinks(true)}
+                type="button"
+              >
+                {linkedTags.length ? "Edit links" : "Add links"}
+              </button>
+            </>
           )}
         </div>
       ) : (
