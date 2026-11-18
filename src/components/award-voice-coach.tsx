@@ -385,6 +385,7 @@ export function AwardVoiceCoach({
 
   useEffect(() => {
     if (autoStart) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

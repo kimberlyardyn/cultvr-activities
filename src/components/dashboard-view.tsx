@@ -41,7 +41,6 @@ import type {
   WeeklyChallenge,
 } from "@/lib/types";
 import { currentPriorityLabel } from "@/lib/student-profile";
-import { formatDate } from "@/lib/utils";
 
 type DashboardViewProps = {
   awards: Award[];
@@ -237,26 +236,6 @@ function ContinueTab({
   );
 }
 
-function StoryActivitiesTab() {
-  return <ComingSoonPanel kicker="Activities" title="Coming soon" />;
-}
-
-function ComingSoonPanel({ kicker, title }: { kicker: string; title: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-10 text-center">
-      <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-[color:var(--almanac-ink-soft)]">
-        {kicker}
-      </p>
-      <h2 className="mt-3 font-serif text-3xl leading-tight text-[color:var(--almanac-ink)] md:text-4xl">
-        {title}
-      </h2>
-      <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-        We&apos;re still designing this section. It will arrive in a future update.
-      </p>
-    </div>
-  );
-}
-
 function CollegeListTab({ model }: { model: DashboardModel }) {
   const active = model.collegeList.filter(
     (t) => !closedStatuses.includes(t.status as (typeof closedStatuses)[number]),
@@ -281,9 +260,9 @@ function CollegeListTab({ model }: { model: DashboardModel }) {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5">
-              <h3 className="font-serif text-2xl leading-tight">Start with one target you're curious about.</h3>
+              <h3 className="font-serif text-2xl leading-tight">Start with one target you&apos;re curious about.</h3>
               <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-                A school, a job, a fellowship, a skill, a quality you want to grow — anything you're working toward.
+                A school, a job, a fellowship, a skill, a quality you want to grow — anything you&apos;re working toward.
               </p>
             </div>
           )}
@@ -932,6 +911,8 @@ function ProfileDepthOverview({ activities, awards }: { activities: Activity[]; 
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Hydrate saved categories from localStorage after mount (SSR-safe).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTags(loadTags());
   }, []);
 
@@ -1415,82 +1396,6 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
   );
 }
 
-function SignalCard({ signal }: { signal: StorySignal }) {
-  return (
-    <article className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-serif text-2xl leading-tight">{signal.label}</h3>
-        <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
-          {signal.strength}%
-        </p>
-      </div>
-      <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-        {signal.explanation}
-      </p>
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/10">
-        <div
-          className="h-full rounded-full bg-[color:var(--almanac-butter)]"
-          style={{ width: `${signal.strength}%` }}
-        />
-      </div>
-    </article>
-  );
-}
-
-function ReflectionRow({ reflection }: { reflection: ReflectionCard }) {
-  return (
-    <article className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
-      <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-        {reflection.sourceLabel} - {formatDate(reflection.date)}
-      </p>
-      <h3 className="mt-2 font-serif text-2xl leading-tight">{reflection.title}</h3>
-      <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-        {reflection.summary}
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {reflection.themes.map((theme) => (
-          <Pill key={theme}>{theme}</Pill>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function WeeklyActionRow({
-  action,
-  onStart,
-}: {
-  action: WeeklyAction;
-  onStart: () => void;
-}) {
-  return (
-    <article className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h3 className="font-serif text-2xl leading-tight">{action.title}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Pill>{action.status}</Pill>
-            <Pill>{action.timeEstimate}</Pill>
-          </div>
-        </div>
-        <button
-          className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--almanac-rule)] px-4 text-sm font-medium transition hover:bg-white/50"
-          onClick={onStart}
-          type="button"
-        >
-          Start reflection
-        </button>
-      </div>
-      <p className="mt-3 text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-        {action.whyItMatters}
-      </p>
-      <p className="mt-3 rounded-xl bg-white/45 px-3 py-2 text-sm leading-6 text-[color:var(--almanac-ink)]">
-        {action.suggestedPrompt}
-      </p>
-    </article>
-  );
-}
-
 function CollegeCard({ college }: { college: CollegeListItem }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -1858,17 +1763,6 @@ function ReadinessCard({ area }: { area: ReadinessArea }) {
   );
 }
 
-function ReadinessLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-3">
-      <p className="text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-        {label}
-      </p>
-      <p className="mt-2 text-sm leading-6 text-[color:var(--almanac-ink)]">{value}</p>
-    </div>
-  );
-}
-
 function DiagnosisList({ items, label }: { items: string[]; label: string }) {
   return (
     <div className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-5">
@@ -1922,14 +1816,6 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       className="h-10 min-w-0 rounded-lg border border-[color:var(--almanac-rule)] bg-white/65 px-3 text-sm text-[color:var(--almanac-ink)] outline-none focus:border-[color:var(--almanac-olive)]"
     />
-  );
-}
-
-function Pill({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex w-fit rounded-full bg-white/60 px-3 py-1 text-xs font-medium text-[color:var(--almanac-ink-soft)]">
-      {children}
-    </span>
   );
 }
 

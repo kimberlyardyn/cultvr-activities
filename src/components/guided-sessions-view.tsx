@@ -264,6 +264,8 @@ export function GuidedSessionsView({
       stashed = null;
     }
     if (!stashed || !activities.some((a) => a.id === stashed)) return;
+    // Restore a one-time stashed selection on mount (handoff from Activities).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedId("deepen-activity");
     setSelectedActivityId(stashed);
     setPanel("live");
@@ -1618,6 +1620,7 @@ function TextSession({
 
   // Reset progressive-disclosure state whenever the conversation resets.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (messages.length === 0) setChipsVisible(false);
   }, [messages.length]);
 

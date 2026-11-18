@@ -108,7 +108,6 @@ const palettes = {
     butter: "#F0C988",
   },
 } as const;
-const palette = palettes.paper;
 
 const nav = [
   { id: "overview", label: "Dashboard", icon: BookOpen },
@@ -1465,6 +1464,8 @@ function ActionPlanView({
     );
 
   useEffect(() => {
+    // Hydrate the action plan from localStorage after mount (SSR-safe).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoreState(parsePlanStore(localStorage.getItem("cultvr-action-plan-v3")));
     setReady(true);
   }, []);
@@ -2612,14 +2613,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       </p>
       <p className="mt-2 font-serif text-2xl">{value}</p>
     </div>
-  );
-}
-
-function SectionKicker({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[0.68rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-      {children}
-    </p>
   );
 }
 

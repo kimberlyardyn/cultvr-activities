@@ -413,7 +413,7 @@ export function ActivitiesTab({
           <div className="mb-3 flex items-center gap-2 rounded-xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-2.5 text-xs text-[color:var(--almanac-ink-soft)]">
             <Sparkles size={13} />
             <span>
-              <strong className="text-[color:var(--almanac-ink)]">These are samples</strong> showing what a strong entry looks like. They'll disappear once you add your own.
+              <strong className="text-[color:var(--almanac-ink)]">These are samples</strong> showing what a strong entry looks like. They&apos;ll disappear once you add your own.
             </span>
           </div>
           <div className="grid gap-3">
@@ -2852,14 +2852,6 @@ function formatResume(a: Activity): string {
 function awardLine(a: Award): string {
   const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(", ");
   return meta ? `${a.name} — ${meta}` : a.name;
-}
-
-function formatAwardResume(a: Award): string {
-  const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(" · ");
-  const head = `${a.name}${a.year ? `    ${a.year}` : ""}`;
-  return [head, meta && !a.year ? meta : meta.replace(` · ${a.year}`, "")]
-    .filter(Boolean)
-    .join("\n");
 }
 
 /** Builds the awards block for a given format. Returns "" if no awards. */
