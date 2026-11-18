@@ -262,7 +262,7 @@ export function WeeklyChallengeTab({
             <p className="text-[0.65rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
               This week
             </p>
-            <p className="mt-0.5 font-serif text-xl italic text-[color:var(--almanac-ink)]">
+            <p className="mt-0.5 font-serif text-xl text-[color:var(--almanac-ink)]">
               {formatWeekRange(currentWeek)}
             </p>
           </div>
@@ -309,7 +309,7 @@ export function WeeklyChallengeTab({
                   key={week}
                 >
                   <div className="flex items-baseline justify-between">
-                    <p className="font-serif text-lg italic text-[color:var(--almanac-ink)]">
+                    <p className="font-serif text-lg text-[color:var(--almanac-ink)]">
                       {formatWeekRange(week)}
                     </p>
                     <p className="text-xs text-[color:var(--almanac-ink-soft)]">
@@ -551,7 +551,7 @@ function ChallengeEditor({
               <p className="text-xs font-medium text-[color:var(--almanac-ink)]">
                 Suggestions <span className="font-normal text-[color:var(--almanac-ink-soft)]">— tap one to use, or write your own below</span>
               </p>
-              <p className="mt-1 text-xs italic text-[color:var(--almanac-ink-soft)]">
+              <p className="mt-1 text-xs text-[color:var(--almanac-ink-soft)]">
                 {CATEGORY_BY_ID.get(category)!.blurb}
               </p>
               <div className="mt-2 flex max-h-72 flex-col gap-1.5 overflow-y-auto rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-2">

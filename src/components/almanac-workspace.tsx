@@ -746,7 +746,7 @@ function PrefsPopup({
                 fontFamily === value
                   ? "bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)] shadow-sm"
                   : "text-[color:var(--almanac-ink-soft)] hover:text-[color:var(--almanac-ink)]",
-                value === "serif" ? "font-serif italic" : "",
+                value === "serif" ? "font-serif" : "",
               ].join(" ")}
               key={value}
               onClick={() => setFontFamily(value)}
@@ -1241,7 +1241,7 @@ function ActivitiesView({ activities }: { activities: Activity[] }) {
         title={
           <>
             Your{" "}
-            <em className="font-serif italic text-[color:var(--almanac-olive)]">
+            <em className="font-serif text-[color:var(--almanac-olive)]">
               activities
             </em>
           </>
@@ -1287,7 +1287,7 @@ function GoalsView({ goals }: { goals: Goal[] }) {
         title={
           <>
             Your{" "}
-            <em className="font-serif italic text-[color:var(--almanac-clay)]">
+            <em className="font-serif text-[color:var(--almanac-clay)]">
               goals
             </em>
           </>
@@ -1601,7 +1601,7 @@ function ActionPlanView({
           title={
             <>
               Action{" "}
-              <em className="font-serif italic text-[color:var(--almanac-sage)]">Plan</em>
+              <em className="font-serif text-[color:var(--almanac-sage)]">Plan</em>
             </>
           }
         />
@@ -1851,7 +1851,7 @@ function PrintableActionPlan({
                     </h3>
 
                     {empty ? (
-                      <p className="text-xs italic text-gray-500">
+                      <p className="text-xs text-gray-500">
                         Nothing here yet.
                       </p>
                     ) : (
@@ -2105,7 +2105,7 @@ function PlanColumn({
             <span className="mt-0.5 size-3.5 shrink-0 rounded-full border-2 border-[color:var(--almanac-ink-faint,rgba(31,36,51,0.2))]" />
             <span className="text-[0.83rem] leading-snug text-[color:var(--almanac-ink-soft)]">
               {example}
-              <span className="ml-1 text-[0.7rem] italic opacity-70">— tap to start</span>
+              <span className="ml-1 text-[0.7rem] opacity-70">— tap to start</span>
             </span>
           </button>
         ) : null}
@@ -2357,7 +2357,7 @@ function TimelineView({
         title={
           <>
             Your{" "}
-            <em className="font-serif italic text-[color:var(--almanac-sage)]">
+            <em className="font-serif text-[color:var(--almanac-sage)]">
               timeline
             </em>
           </>
@@ -2573,10 +2573,10 @@ function PageHeader({
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={["flex items-center", compact ? "justify-center" : "gap-3"].join(" ")}>
-      <span className="flex size-11 items-center justify-center rounded-full bg-[color:var(--almanac-ink)] font-serif text-2xl italic leading-none text-[color:var(--almanac-paper)]">
+      <span className="flex size-11 items-center justify-center rounded-full bg-[color:var(--almanac-ink)] font-serif text-2xl leading-none text-[color:var(--almanac-paper)]">
         c
       </span>
-      {compact ? null : <p className="font-serif text-[2.15rem] italic leading-none">cultvr</p>}
+      {compact ? null : <p className="font-serif text-[2.15rem] leading-none">cultvr</p>}
     </div>
   );
 }

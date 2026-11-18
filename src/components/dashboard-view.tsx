@@ -127,7 +127,7 @@ export function DashboardView({
         title={
           <>
             Your{" "}
-            <em className="font-serif italic text-[color:var(--almanac-butter)]">
+            <em className="font-serif text-[color:var(--almanac-butter)]">
               workspace
             </em>
           </>
@@ -211,15 +211,12 @@ function ContinueTab({
       <section className="w-full rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-ink)] p-5 text-[color:var(--almanac-paper)] md:p-6">
         <h2 className="max-w-3xl font-serif text-4xl leading-[1.02] md:text-5xl">
           Welcome back,{" "}
-          <em className="italic text-[color:var(--almanac-butter)]">
+          <em className="text-[color:var(--almanac-butter)]">
             {firstName}
           </em>
         </h2>
         <p className="mt-3 max-w-3xl text-base leading-7 text-white/70">
-          Continue where you left off.
-        </p>
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-white/72">
-          {model.continuePanel.heroSummary}
+          Let&apos;s reflect and strategize!
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
           <PrimaryButton onClick={() => onNavigateTab?.("sessions")}>
@@ -834,7 +831,7 @@ function SmallPanel({ children, label }: { children: ReactNode; label: string })
 }
 
 const TAG_COLORS = ["#4e5b7a", "#d27b57", "#efc97a", "#7a9e7a", "#9b7ab8", "#5b8fa8", "#c4697a", "#8a7a5b"];
-const DEFAULT_TAGS = ["STEM", "Humanities", "Leadership", "Social Service"];
+const DEFAULT_TAGS = ["STEM", "Humanities", "Leadership", "Arts", "Athletics"];
 const STORAGE_KEY = "cultvr-profile-depth-tags";
 
 /** Keyword map used to auto-classify activities/awards into tags. */
@@ -844,6 +841,7 @@ const TAG_KEYWORDS: Record<string, string[]> = {
   leadership: ["leadership", "president", "captain", "founder", "lead", "officer", "chair", "director", "manager", "mentor", "council", "student government"],
   "social service": ["service", "volunteer", "community", "nonprofit", "charity", "outreach", "tutor", "mentor", "fundrais", "advocacy", "civic"],
   arts: ["art", "music", "theater", "theatre", "dance", "film", "photography", "design", "creative", "paint", "draw", "sculpt", "sing", "choir", "orchestra", "band"],
+  athletics: ["sport", "athlet", "varsity", "soccer", "basketball", "baseball", "football", "tennis", "swim", "volleyball", "cross country", "lacrosse", "wrestling", "gymnastics", "rowing", "crew", "hockey", "golf", "track and field", "championship", "intramural", "fitness"],
   creativity: ["creative", "innovation", "invent", "design", "maker", "craft", "build", "create", "entrepreneurship", "startup"],
 };
 
@@ -1032,7 +1030,7 @@ function ProfileDepthOverview({ activities, awards }: { activities: Activity[]; 
                   <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-3">
-                      <p className="font-serif text-xl italic leading-tight text-[color:var(--almanac-ink)]">
+                      <p className="font-serif text-xl leading-tight text-[color:var(--almanac-ink)]">
                         {item.label}
                       </p>
                       <p className="text-xs text-[color:var(--almanac-ink-soft)]">
@@ -1103,7 +1101,7 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
     <section className="overflow-hidden rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-4 md:p-5">
       <div className="flex flex-col gap-1">
         <p className="text-[0.68rem] uppercase tracking-[0.18em] text-[color:var(--almanac-ink-soft)]">
-          Knowledge Graph
+          Profile Themes
         </p>
         <p className="max-w-sm text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
           Patterns emerging from your sessions and activities.
@@ -1111,7 +1109,7 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
       </div>
 
       <div className="mt-4 h-56 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#2e3138] via-[#23262c] to-[#2a2d34] p-2 shadow-inner">
-          <svg className="h-full w-full" viewBox="0 0 760 230" role="img" aria-label="Session keyword knowledge graph">
+          <svg className="h-full w-full" viewBox="0 0 760 230" role="img" aria-label="Profile themes">
             <defs>
               <filter id="knowledge-glow" x="-80%" y="-80%" width="260%" height="260%">
                 <feGaussianBlur stdDeviation="3" result="blur" />
@@ -1327,24 +1325,27 @@ function KnowledgeGraphPanel({ graph }: { graph: KnowledgeGraph }) {
                       />
                     </circle>
                   )}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    fill={nodeFill(node.kind)}
-                    r={radius}
+                  <g
+                    transform={`translate(${node.x} ${node.y})`}
                     filter={isHub ? "url(#knowledge-glow)" : undefined}
-                    stroke="rgba(255,255,255,0.8)"
-                    strokeWidth="0.8"
                   >
-                    {/* Subtle "breathing" radius on every node. */}
-                    <animate
-                      attributeName="r"
-                      dur={pulseDur}
-                      begin={pulseDelay}
-                      values={`${radius};${radius * 1.12};${radius}`}
-                      repeatCount="indefinite"
-                    />
-                  </circle>
+                    <path
+                      d={starPoints(radius)}
+                      fill={nodeFill(node.kind)}
+                      stroke="rgba(90,66,12,0.35)"
+                      strokeWidth="0.5"
+                    >
+                      {/* Subtle "breathing" scale on every star. */}
+                      <animateTransform
+                        attributeName="transform"
+                        type="scale"
+                        dur={pulseDur}
+                        begin={pulseDelay}
+                        values="1;1.12;1"
+                        repeatCount="indefinite"
+                      />
+                    </path>
+                  </g>
                   {satelliteOffsets(node.id).map((offset, index) => (
                     <g key={`${node.id}-satellite-${index}`}>
                       <path
@@ -2500,8 +2501,20 @@ function layoutGraphNodes(nodes: KnowledgeGraphNode[]) {
 }
 
 function nodeFill(_kind: KnowledgeGraphNode["kind"]) {
-  // All bubbles are white — importance is conveyed by size, not color.
-  return "#ffffff";
+  // Minimal gold stars — importance is conveyed by size, not color.
+  return "#F2C14E";
+}
+
+/** 5-pointed star path centered at the origin, with outer radius `r`. */
+function starPoints(r: number): string {
+  const inner = r * 0.42;
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    const radius = i % 2 === 0 ? r : inner;
+    const a = (Math.PI / 5) * i - Math.PI / 2;
+    pts.push(`${(radius * Math.cos(a)).toFixed(2)},${(radius * Math.sin(a)).toFixed(2)}`);
+  }
+  return `M ${pts.join(" L ")} Z`;
 }
 
 function satelliteOffsets(seed: string) {

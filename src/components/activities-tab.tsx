@@ -652,7 +652,7 @@ function ActivityCard({
       {expanded && (
        <>
       {activity.organization_description && (
-        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs italic leading-5 text-[color:var(--almanac-ink-soft)]">
+        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
           <span className="font-semibold uppercase not-italic tracking-[0.12em]">About:</span>{" "}
           {activity.organization_description}
         </p>

@@ -90,7 +90,7 @@ export default function AboutPage() {
             About cultivr
           </p>
           <h1 className="mt-6 max-w-xl font-serif text-5xl leading-[0.95] text-[#1F2433] sm:text-6xl md:text-7xl">
-            An <em className="italic text-[#C97A5D]">journal</em> for the college years.
+            An <em className="text-[#C97A5D]">journal</em> for the college years.
           </h1>
           <p className="mt-6 max-w-md font-mono text-xs uppercase tracking-[0.14em] text-[#1F2433]/55">
             est. 2026 · made with counselors and students
@@ -123,7 +123,7 @@ export default function AboutPage() {
             A workspace for the four-year stretch between curiosity and college
             — somewhere to log what you do, talk through what it means, and
             arrive at application season with{" "}
-            <em className="italic text-[#3F4A66]">a record worth reading</em>.
+            <em className="text-[#3F4A66]">a record worth reading</em>.
           </p>
         </div>
       </section>
@@ -134,7 +134,7 @@ export default function AboutPage() {
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#1F2433]/60">
             How it works
           </p>
-          <p className="hidden font-serif text-sm italic text-[#1F2433]/55 md:block">
+          <p className="hidden font-serif text-sm text-[#1F2433]/55 md:block">
             three habits, one workspace
           </p>
         </div>
@@ -179,7 +179,7 @@ export default function AboutPage() {
             </p>
             <h2 className="mt-4 max-w-md font-serif text-4xl leading-[1.05] text-[#1F2433] md:text-5xl">
               Small entries.{" "}
-              <em className="italic text-[#3F4A66]">Real outcomes.</em>
+              <em className="text-[#3F4A66]">Real outcomes.</em>
             </h2>
             <p className="mt-5 max-w-sm text-sm leading-6 text-[#1F2433]/65">
               You don&apos;t need to write essays in November. You need to keep a
@@ -192,7 +192,7 @@ export default function AboutPage() {
               <li className="relative" key={entry.day}>
                 <span className="absolute -left-[1.85rem] top-2 size-2.5 rounded-full border border-[#1F2433]/40 bg-[#ECE6E0]" />
                 <div className="flex items-baseline gap-4">
-                  <span className="font-serif text-xl italic text-[#1F2433]/55">
+                  <span className="font-serif text-xl text-[#1F2433]/55">
                     {entry.day}
                   </span>
                   <span className="font-mono text-[0.65rem] uppercase tracking-[0.18em] text-[#C97A5D]">

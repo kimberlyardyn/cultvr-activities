@@ -92,7 +92,7 @@ export function ChatPanel({ variant = "default" }: { variant?: "default" | "alma
             <div
               className={
                 isAlmanac
-                  ? "mr-auto rounded-xl bg-[color:var(--almanac-paper)] px-4 py-3 font-serif text-lg italic text-[color:var(--almanac-ink-soft)] shadow-sm"
+                  ? "mr-auto rounded-xl bg-[color:var(--almanac-paper)] px-4 py-3 font-serif text-lg text-[color:var(--almanac-ink-soft)] shadow-sm"
                   : "mr-auto rounded-lg bg-white px-4 py-3 text-sm text-[#65726b] shadow-sm"
               }
             >

@@ -37,6 +37,13 @@ button {
   cursor: pointer;
 }
 
+/* No italic accents anywhere — em/i render upright (italic utilities are
+   removed from markup too; this covers default emphasis styling). */
+em,
+i {
+  font-style: normal;
+}
+
 /* Toast entrance — slides up + fades in from the bottom-right stack. */
 @keyframes toastIn {
   from {

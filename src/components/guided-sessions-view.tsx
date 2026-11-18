@@ -588,7 +588,7 @@ export function GuidedSessionsView({
         title={
           <>
             Guided{" "}
-            <em className="font-serif italic text-[color:var(--almanac-butter)]">session</em>
+            <em className="font-serif text-[color:var(--almanac-butter)]">session</em>
           </>
         }
       />
@@ -1787,7 +1787,7 @@ function TextSession({
           )
         ) : !started && !deferStarters ? (
           <button
-            className="mt-4 text-xs italic text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
+            className="mt-4 text-xs text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
             onClick={() => setChipsVisible(true)}
             type="button"
           >

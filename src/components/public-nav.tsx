@@ -4,10 +4,10 @@ export function PublicNav() {
   return (
     <header className="flex items-center justify-between gap-4">
       <Link className="flex items-center gap-3" href="/">
-        <span className="flex size-9 items-center justify-center rounded-full bg-[#1F2433] font-serif text-xl italic text-[#ECE6E0]">
+        <span className="flex size-9 items-center justify-center rounded-full bg-[#1F2433] font-serif text-xl text-[#ECE6E0]">
           c
         </span>
-        <span className="hidden font-serif text-2xl italic text-[#1F2433] sm:inline">
+        <span className="hidden font-serif text-2xl text-[#1F2433] sm:inline">
           cultivr
         </span>
       </Link>
