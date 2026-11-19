@@ -182,6 +182,7 @@ export function ActivityVoiceCoach({
   // Auto-start when invoked via the "Voice add" button.
   useEffect(() => {
     if (autoStart) {
+      // eslint-disable-next-line react-hooks/immutability
       void start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +233,7 @@ export function ActivityVoiceCoach({
     [],
   );
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const start = useCallback(async () => {
     if (status === "connecting" || status === "live") return;
     setError(null);

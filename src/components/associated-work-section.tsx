@@ -154,7 +154,7 @@ export function AssociatedWorkSection({
                     </div>
                   )}
                   {!s.focus && !s.summary && !s.transcript && (
-                    <p className="text-xs italic text-[color:var(--almanac-ink-soft)]">
+                    <p className="text-xs text-[color:var(--almanac-ink-soft)]">
                       No additional detail was recorded for this session.
                     </p>
                   )}

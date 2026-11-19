@@ -455,7 +455,7 @@ function AwardCard({
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
   // Collapsed by default so the dashboard stays scannable — just the title,
   // with details/tags/goals behind a click. Samples start open as previews.
-  const [expanded, setExpanded] = useState(isSample);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <article
@@ -531,7 +531,7 @@ function AwardCard({
       {expanded && (
        <>
       {award.scope && (
-        <p className="mt-2 text-xs italic text-[color:var(--almanac-ink-soft)]">{award.scope}</p>
+        <p className="mt-2 text-xs text-[color:var(--almanac-ink-soft)]">{award.scope}</p>
       )}
 
       {award.description && (
@@ -541,7 +541,7 @@ function AwardCard({
       )}
 
       {award.requirements && (
-        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs italic leading-5 text-[color:var(--almanac-ink-soft)]">
+        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
           <span className="font-semibold uppercase not-italic tracking-[0.12em]">Requirements:</span>{" "}
           {award.requirements}
         </p>

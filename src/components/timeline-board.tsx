@@ -558,7 +558,7 @@ function DateBucket({
       <div className="grid grid-cols-2 gap-4 md:gap-8">
         <div className="flex flex-col items-end gap-3">
           {leftItems.length === 0 ? (
-            <div className="text-[0.7rem] italic text-[color:var(--almanac-ink-soft)]/60">
+            <div className="text-[0.7rem] text-[color:var(--almanac-ink-soft)]/60">
               —
             </div>
           ) : (
@@ -575,7 +575,7 @@ function DateBucket({
         </div>
         <div className="flex flex-col items-start gap-3">
           {rightItems.length === 0 ? (
-            <div className="text-[0.7rem] italic text-[color:var(--almanac-ink-soft)]/60">
+            <div className="text-[0.7rem] text-[color:var(--almanac-ink-soft)]/60">
               —
             </div>
           ) : (

@@ -16,7 +16,7 @@ export default function Home() {
     >
       <div className="relative z-10 flex flex-col items-center text-center">
         {/* Brand name */}
-        <h1 className="font-serif text-6xl italic tracking-tight text-[#1F2433] sm:text-7xl md:text-8xl">
+        <h1 className="font-serif text-6xl tracking-tight text-[#1F2433] sm:text-7xl md:text-8xl">
           Cultivr
           <span className="text-[#C97A5D]">.</span>
         </h1>
@@ -32,7 +32,7 @@ export default function Home() {
         <div>
           <RevealText
             text="Small Steps. Big Momentum."
-            className="font-serif text-2xl italic leading-relaxed tracking-wide text-[#1F2433]/85 sm:text-3xl md:text-4xl"
+            className="font-serif text-2xl leading-relaxed tracking-wide text-[#1F2433]/85 sm:text-3xl md:text-4xl"
           />
         </div>
 

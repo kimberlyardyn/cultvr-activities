@@ -264,6 +264,8 @@ export function GuidedSessionsView({
       stashed = null;
     }
     if (!stashed || !activities.some((a) => a.id === stashed)) return;
+    // Restore a one-time stashed selection on mount (handoff from Activities).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedId("deepen-activity");
     setSelectedActivityId(stashed);
     setPanel("live");
@@ -586,7 +588,7 @@ export function GuidedSessionsView({
         title={
           <>
             Guided{" "}
-            <em className="font-serif italic text-[color:var(--almanac-butter)]">session</em>
+            <em className="font-serif text-[color:var(--almanac-butter)]">session</em>
           </>
         }
       />
@@ -1618,6 +1620,7 @@ function TextSession({
 
   // Reset progressive-disclosure state whenever the conversation resets.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (messages.length === 0) setChipsVisible(false);
   }, [messages.length]);
 
@@ -1784,7 +1787,7 @@ function TextSession({
           )
         ) : !started && !deferStarters ? (
           <button
-            className="mt-4 text-xs italic text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
+            className="mt-4 text-xs text-[color:var(--almanac-ink-soft)] underline-offset-2 transition hover:text-[color:var(--almanac-ink)] hover:underline"
             onClick={() => setChipsVisible(true)}
             type="button"
           >

@@ -282,7 +282,7 @@ export function DiscoverView() {
           Curated for you
         </p>
         <h1 className="mt-2 font-serif text-4xl leading-[1.05] text-[color:var(--almanac-ink)] md:text-5xl">
-          <em className="italic text-[color:var(--almanac-sage,#7a9e7a)]">Discover</em>
+          <em className="text-[color:var(--almanac-sage,#7a9e7a)]">Discover</em>
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
           Discover where to apply, explore new careers and directions, and receive personalized mentorship. Every card opens directly to the source — no detours.

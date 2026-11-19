@@ -25,12 +25,6 @@ let toasts: Toast[] = [];
 let nextId = 1;
 const listeners = new Set<() => void>();
 
-function emit() {
-  // New array reference so useSyncExternalStore detects the change.
-  toasts = [...toasts];
-  for (const l of listeners) l();
-}
-
 function remove(id: number) {
   toasts = toasts.filter((t) => t.id !== id);
   for (const l of listeners) l();

@@ -413,7 +413,7 @@ export function ActivitiesTab({
           <div className="mb-3 flex items-center gap-2 rounded-xl border border-dashed border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-4 py-2.5 text-xs text-[color:var(--almanac-ink-soft)]">
             <Sparkles size={13} />
             <span>
-              <strong className="text-[color:var(--almanac-ink)]">These are samples</strong> showing what a strong entry looks like. They'll disappear once you add your own.
+              <strong className="text-[color:var(--almanac-ink)]">These are samples</strong> showing what a strong entry looks like. They&apos;ll disappear once you add your own.
             </span>
           </div>
           <div className="grid gap-3">
@@ -566,10 +566,10 @@ function ActivityCard({
   // sub-sections read as repetitive "(0)" noise — so we collapse them into one
   // friendly nudge until the student opts to expand them.
   const [showBareSections, setShowBareSections] = useState(false);
-  // Collapsed by default so the dashboard stays scannable — name + position
-  // only, with the rest (description, dates, tags, goals…) behind a click.
-  // Sample cards start open so the template preview is visible.
-  const [expanded, setExpanded] = useState(isSample);
+  // Collapsed by default (sample cards included) so the list stays scannable —
+  // name + position only, with the rest (description, dates, tags, goals…)
+  // behind a click.
+  const [expanded, setExpanded] = useState(false);
   const start = activity.start_date ?? "";
   const end = activity.in_progress ? "Present" : activity.end_date ?? "";
   const dateRange = start || end ? `${start || "—"} → ${end || "—"}` : null;
@@ -652,7 +652,7 @@ function ActivityCard({
       {expanded && (
        <>
       {activity.organization_description && (
-        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs italic leading-5 text-[color:var(--almanac-ink-soft)]">
+        <p className="mt-3 rounded-lg border border-[color:var(--almanac-rule)] bg-white/40 px-3 py-2 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">
           <span className="font-semibold uppercase not-italic tracking-[0.12em]">About:</span>{" "}
           {activity.organization_description}
         </p>
@@ -2852,14 +2852,6 @@ function formatResume(a: Activity): string {
 function awardLine(a: Award): string {
   const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(", ");
   return meta ? `${a.name} — ${meta}` : a.name;
-}
-
-function formatAwardResume(a: Award): string {
-  const meta = [a.organization, a.scope, a.level, a.year].filter(Boolean).join(" · ");
-  const head = `${a.name}${a.year ? `    ${a.year}` : ""}`;
-  return [head, meta && !a.year ? meta : meta.replace(` · ${a.year}`, "")]
-    .filter(Boolean)
-    .join("\n");
 }
 
 /** Builds the awards block for a given format. Returns "" if no awards. */
