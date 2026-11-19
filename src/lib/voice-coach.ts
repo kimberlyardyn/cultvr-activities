@@ -129,6 +129,13 @@ export function isGoalPrompt(text: string): boolean {
   if (/\b(added to the form|i'?ve added|i'?ll add|got it|has been added|have been added)\b/.test(t)) {
     return false;
   }
+  // Skip the wrap-up review ("take a look at the form — anything need
+  // adjusting?"): the answer is an edit request, not a new goal.
+  if (
+    /\b(on the form|filled in|look (?:it )?over|take a look|need(?:s)? adjusting|looks? good|anything (?:else )?(?:to )?(?:change|adjust|tweak|fix))\b/.test(t)
+  ) {
+    return false;
+  }
   return (
     /\?/.test(t) ||
     /\b(do you|is there|are there|what are your|tell me|any (?:other )?goals?|any (?:other )?targets?)\b/.test(t)

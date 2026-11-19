@@ -63,7 +63,7 @@ const COACH_INSTRUCTIONS = [
   "",
   "As you learn details, call the `update_fields` tool to fill the form. Call it AS OFTEN AS YOU LEARN something new — overwrite description with the improved polished version as the conversation progresses.",
   "",
-  "When done, give a brief verbal summary and let them know everything — including any goals — has been added to the form to review or refine before saving.",
+  "WRAPPING UP: When you've covered the sections and they sound done, do NOT recite a summary of what you captured. Instead, tell them everything is filled in on the form, and ask them to look it over, e.g. 'Take a look at the form — does anything need adjusting? A detail that's off, something missing, or wording you'd change?' If they name a change, make it right away with `update_fields`, confirm it out loud in a few words, and ask whether anything else needs a tweak. Once they say it looks good, let them know they can save it.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
