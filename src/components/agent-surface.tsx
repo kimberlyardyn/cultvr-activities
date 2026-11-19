@@ -72,7 +72,7 @@ export function AgentSurface({ mode }: { mode: "page" | "dock" }) {
           </div>
         ) : null}
         <div className={docked ? "min-h-0 flex-1" : ""}>
-          <AgentPanel compact={docked} onAttentionChange={setAttention} />
+          <AgentPanel active={!docked || open} compact={docked} onAttentionChange={setAttention} />
         </div>
       </div>
     </>

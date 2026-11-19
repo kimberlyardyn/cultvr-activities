@@ -26,7 +26,16 @@ const requestSchema = z.object({
     )
     .min(1)
     .max(40),
+  voice: z.boolean().optional(),
 });
+
+const VOICE_ADDENDUM = `
+
+VOICE MODE: the student is talking to you out loud and your reply will be spoken aloud.
+- Reply in 1-3 short, natural spoken sentences (under about 60 words). It is a conversation, not a report.
+- No lists, markdown, symbols, links, or reading out dates digit by digit.
+- If you propose actions, do not read the details out; say something like "I've put a couple of suggestions on your screen — take a look." The cards carry the details.
+- End with one easy question or invitation so the student knows it's their turn.`;
 
 const SYSTEM_PROMPT = `You are the Cultvr Agent — a proactive college-coaching agent that works alongside a high school student inside their Cultvr workspace.
 
@@ -139,6 +148,7 @@ export async function POST(request: Request) {
         role: "system",
         content:
           SYSTEM_PROMPT +
+          (parsed.data.voice ? VOICE_ADDENDUM : "") +
           (adminInstructions
             ? `\n\nAdministrator guidance you must follow:\n${adminInstructions}`
             : ""),
