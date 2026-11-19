@@ -1139,7 +1139,8 @@ export async function deleteGoal(formData: FormData) {
   const { supabase, user } = await requireUser();
   const id = value(formData, "id");
   if (!id) return;
-  await supabase.from("goals").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase.from("goals").delete().eq("id", id).eq("user_id", user.id);
+  if (error) throw new Error(error.message);
   revalidatePath("/dashboard");
 }
 
