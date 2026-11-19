@@ -1,14 +1,14 @@
 "use client";
 
-import { Check, ChevronDown, Pencil, Plus, Target, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus, Target } from "lucide-react";
 import { useCallback, useState, useTransition } from "react";
 
 import {
   createLinkedGoal,
-  deleteGoal,
   toggleGoalStatus,
   updateLinkedGoal,
 } from "@/app/dashboard/actions";
+import { GoalDeleteButton, nextHidden } from "@/components/goal-delete-button";
 import type { Goal } from "@/lib/types";
 
 type Props = {
@@ -33,6 +33,8 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
   const [editTitle, setEditTitle] = useState("");
   const [editTargetDate, setEditTargetDate] = useState("");
   const [isPending, startTransition] = useTransition();
+  // Goals hidden optimistically while a delete is in flight.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const startEdit = useCallback((goal: Goal) => {
     setEditingId(goal.id);
@@ -87,18 +89,6 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
     [readonly],
   );
 
-  const handleDelete = useCallback(
-    (id: string) => {
-      if (readonly) return;
-      const fd = new FormData();
-      fd.set("id", id);
-      startTransition(() => {
-        void deleteGoal(fd);
-      });
-    },
-    [readonly],
-  );
-
   return (
     <section className="mt-4 border-t border-[color:var(--almanac-rule)] pt-3">
       <div className="flex items-center justify-between gap-2">
@@ -134,7 +124,7 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
             </div>
           )}
 
-          {goals.map((goal) => {
+          {goals.filter((g) => !hidden.has(g.id)).map((goal) => {
             const achieved = goal.status === "achieved";
             const isEditing = editingId === goal.id;
 
@@ -236,7 +226,7 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
                   )}
                 </div>
                 {!readonly && (
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition focus-within:opacity-100 group-hover:opacity-100">
                     <button
                       className="rounded-full p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)]"
                       onClick={() => startEdit(goal)}
@@ -245,14 +235,13 @@ export function LinkedGoals({ parentId, parentKind, goals, readonly = false }: P
                     >
                       <Pencil size={12} />
                     </button>
-                    <button
-                      className="rounded-full p-1 text-[color:var(--almanac-ink-soft)] transition hover:bg-red-500/10 hover:text-red-600"
-                      onClick={() => handleDelete(goal.id)}
-                      title="Delete"
-                      type="button"
-                    >
-                      <X size={12} />
-                    </button>
+                    <GoalDeleteButton
+                      goalId={goal.id}
+                      goalTitle={goal.title}
+                      onDeleted={(id) => setHidden((prev) => nextHidden(prev, id, true))}
+                      onRestore={(id) => setHidden((prev) => nextHidden(prev, id, false))}
+                      size={12}
+                    />
                   </div>
                 )}
               </div>

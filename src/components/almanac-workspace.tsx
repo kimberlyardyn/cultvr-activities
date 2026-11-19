@@ -34,6 +34,7 @@ import { ResumeProfileSection } from "@/components/resume-profile-section";
 import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
 import { AgentSurface } from "@/components/agent-surface";
+import { GoalDeleteButton, nextHidden } from "@/components/goal-delete-button";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -1288,7 +1289,10 @@ function ActivitiesView({ activities }: { activities: Activity[] }) {
 }
 
 
-function GoalsView({ goals }: { goals: Goal[] }) {
+function GoalsView({ goals: allGoals }: { goals: Goal[] }) {
+  // Goals hidden optimistically while a delete is in flight.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const goals = allGoals.filter((g) => !hidden.has(g.id));
   return (
     <Scrollable>
       <PageHeader
@@ -1320,6 +1324,12 @@ function GoalsView({ goals }: { goals: Goal[] }) {
               </p>
               <p className="mt-2 font-serif text-xl">{formatDate(goal.target_date)}</p>
             </div>
+            <GoalDeleteButton
+              goalId={goal.id}
+              goalTitle={goal.title}
+              onDeleted={(id) => setHidden((prev) => nextHidden(prev, id, true))}
+              onRestore={(id) => setHidden((prev) => nextHidden(prev, id, false))}
+            />
           </article>
         ))}
         {!goals.length ? <Empty label="No goals yet." /> : null}
@@ -1975,6 +1985,9 @@ function PlanColumn({
   section: SectionDef;
 }) {
   const [draft, setDraft] = useState("");
+  // Goals hidden optimistically while a delete is in flight.
+  const [hiddenGoals, setHiddenGoals] = useState<Set<string>>(new Set());
+  const visibleGoals = goals.filter((g) => !hiddenGoals.has(g.id));
 
   function commit() {
     if (!draft.trim()) return;
@@ -1982,7 +1995,7 @@ function PlanColumn({
     setDraft("");
   }
 
-  const isEmpty = goals.length === 0 && challenges.length === 0 && items.length === 0;
+  const isEmpty = visibleGoals.length === 0 && challenges.length === 0 && items.length === 0;
   const example = PLAN_PLACEHOLDER[section.id] ?? "e.g. Add your first step";
 
   return (
@@ -2023,7 +2036,7 @@ function PlanColumn({
 
       <div className="grid gap-2">
         {/* Goals from activities / awards */}
-        {goals.map((g) => (
+        {visibleGoals.map((g) => (
           <div
             className={[
               "flex items-start gap-2.5 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] px-3 py-2.5",
@@ -2063,6 +2076,15 @@ function PlanColumn({
               style={{ backgroundColor: `${section.color}1A`, color: section.color }}
             >
               Goal
+            </span>
+            <span className="-my-1 -mr-1.5 self-start">
+              <GoalDeleteButton
+                goalId={g.id}
+                goalTitle={g.title}
+                onDeleted={(id) => setHiddenGoals((prev) => nextHidden(prev, id, true))}
+                onRestore={(id) => setHiddenGoals((prev) => nextHidden(prev, id, false))}
+                size={12}
+              />
             </span>
           </div>
         ))}
