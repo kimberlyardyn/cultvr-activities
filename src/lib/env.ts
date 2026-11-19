@@ -5,7 +5,14 @@ export const env = {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     "",
+  // Server-only. Used by the agent background job, which runs without a
+  // signed-in user and must read across students.
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  // Shared secret Vercel Cron sends as `Authorization: Bearer <CRON_SECRET>`.
+  cronSecret: process.env.CRON_SECRET ?? "",
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  // Must produce 1536-dim vectors to match workspace_chunks.embedding.
+  openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small",
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-5.4-mini",
   openaiRealtimeModel: process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime",
   // Comma-separated list of administrator emails. These accounts can manage the

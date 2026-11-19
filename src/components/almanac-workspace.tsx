@@ -16,6 +16,7 @@ import {
   Plus,
   ListTodo,
   Settings,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +33,7 @@ import { ContactAdminSection } from "@/components/contact-admin-section";
 import { ResumeProfileSection } from "@/components/resume-profile-section";
 import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
+import { AgentSurface } from "@/components/agent-surface";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -58,6 +60,7 @@ import {
 import { formatDate } from "@/lib/utils";
 
 type Tab =
+  | "agent"
   | "overview"
   | "activities"
   | "discover"
@@ -110,6 +113,7 @@ const palettes = {
 } as const;
 
 const nav = [
+  { id: "agent", label: "Agent", icon: Sparkles },
   { id: "overview", label: "Dashboard", icon: BookOpen },
   { id: "sessions", label: "Guided Session", icon: NotebookPen },
   { id: "action-plan", label: "Action Plan", icon: ListTodo },
@@ -136,7 +140,8 @@ export function AlmanacWorkspace({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [tab, setTabState] = useState<Tab>(
-    initialTab === "overview" ||
+    initialTab === "agent" ||
+      initialTab === "overview" ||
       initialTab === "sessions" ||
       initialTab === "activities" ||
       initialTab === "goals" ||
@@ -144,7 +149,7 @@ export function AlmanacWorkspace({
       initialTab === "timeline" ||
       initialTab === "discover"
       ? initialTab
-      : "overview",
+      : "agent",
   );
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [navLayout, setNavLayoutState] = useState<"left" | "top">(
@@ -260,7 +265,8 @@ export function AlmanacWorkspace({
     setTabState(next);
 
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "overview") {
+    // The Agent is the default landing surface, so it owns the bare URL.
+    if (next === "agent") {
       params.delete("tab");
     } else {
       params.set("tab", next);
@@ -279,6 +285,7 @@ export function AlmanacWorkspace({
     function handleNavigate(event: Event) {
       const next = (event as CustomEvent<{ tab?: string }>).detail?.tab;
       if (
+        next === "agent" ||
         next === "overview" ||
         next === "sessions" ||
         next === "activities" ||
@@ -474,6 +481,8 @@ export function AlmanacWorkspace({
               weeklyChallenges={weeklyChallenges}
             />
           ) : null}
+          {/* Always mounted: full page on the Agent tab, floating dock elsewhere. */}
+          <AgentSurface mode={tab === "agent" ? "page" : "dock"} />
           {tab === "activities" ? <ActivitiesView activities={activities} /> : null}
           {tab === "discover" ? <DiscoverView /> : null}
           {tab === "goals" ? <GoalsView goals={goals} /> : null}
