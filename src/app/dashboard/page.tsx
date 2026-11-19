@@ -19,6 +19,7 @@ import type {
 } from "@/lib/types";
 
 const dashboardTabs = new Set([
+  "agent",
   "overview",
   "sessions",
   "action-plan",

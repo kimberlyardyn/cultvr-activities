@@ -33,7 +33,7 @@ import { ContactAdminSection } from "@/components/contact-admin-section";
 import { ResumeProfileSection } from "@/components/resume-profile-section";
 import { toast } from "@/components/toast";
 import { PdfDoc, docTitle } from "@/lib/pdf-doc";
-import { AgentPanel } from "@/components/agent-panel";
+import { AgentSurface } from "@/components/agent-surface";
 import { DashboardView } from "@/components/dashboard-view";
 import { DiscoverView } from "@/components/discover-view";
 import { GuidedSessionsView } from "@/components/guided-sessions-view";
@@ -149,7 +149,7 @@ export function AlmanacWorkspace({
       initialTab === "timeline" ||
       initialTab === "discover"
       ? initialTab
-      : "overview",
+      : "agent",
   );
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [navLayout, setNavLayoutState] = useState<"left" | "top">(
@@ -265,7 +265,8 @@ export function AlmanacWorkspace({
     setTabState(next);
 
     const params = new URLSearchParams(searchParams.toString());
-    if (next === "overview") {
+    // The Agent is the default landing surface, so it owns the bare URL.
+    if (next === "agent") {
       params.delete("tab");
     } else {
       params.set("tab", next);
@@ -480,7 +481,8 @@ export function AlmanacWorkspace({
               weeklyChallenges={weeklyChallenges}
             />
           ) : null}
-          {tab === "agent" ? <AgentPanel /> : null}
+          {/* Always mounted: full page on the Agent tab, floating dock elsewhere. */}
+          <AgentSurface mode={tab === "agent" ? "page" : "dock"} />
           {tab === "activities" ? <ActivitiesView activities={activities} /> : null}
           {tab === "discover" ? <DiscoverView /> : null}
           {tab === "goals" ? <GoalsView goals={goals} /> : null}

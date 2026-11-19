@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { z } from "zod";
 
 import { AGENT_TOOLS, isAgentToolName } from "@/lib/agent/tools";
+import { indexWorkspaceForUser, isIndexStale, searchWorkspace } from "@/lib/agent/workspace-index";
 import { env, hasOpenAIEnv, hasSupabaseEnv } from "@/lib/env";
 import { getOpenAI } from "@/lib/openai";
 import {
@@ -10,6 +11,10 @@ import {
   formatStudentContextForPrompt,
 } from "@/lib/student-context";
 import { createClient } from "@/lib/supabase/server";
+
+export const maxDuration = 60;
+
+const MAX_STEPS = 4;
 
 const requestSchema = z.object({
   messages: z
@@ -25,9 +30,10 @@ const requestSchema = z.object({
 
 const SYSTEM_PROMPT = `You are the Cultvr Agent — a proactive college-coaching agent that works alongside a high school student inside their Cultvr workspace.
 
-You can see the student's workspace context (profile, activities, awards, goals, tasks, deadlines, recent sessions). Use it to:
+You can see a summary of the student's workspace (profile, activities, awards, goals, tasks, deadlines, recent sessions). Use it to:
 - Review what they have and name the 1-3 highest-leverage priorities right now.
-- When a concrete, consequential change would genuinely help (a new goal, or a new task/deadline), PROPOSE it by calling the matching tool. You are proposing, never doing: every tool call is a suggestion the student must approve before anything is saved.
+- Look things up when you need specifics: call search_workspace to retrieve details from their notes, past sessions, activities, awards, goals and colleges before making claims about them.
+- When a concrete, consequential change would genuinely help, PROPOSE it by calling the matching tool: create_goal, create_task, update_activity (improve an existing activity), add_college, or create_note. You are proposing, never doing: every one of these is a suggestion the student must approve before anything is saved.
 - Tie each proposal to something real in their workspace (a gap, a deadline, a recent activity), and include a one-sentence reason.
 
 How much to lead (read the student on each turn):
@@ -37,10 +43,28 @@ How much to lead (read the student on each turn):
 - Always frame proposals as offers with a reason, never commands, and always leave an easy out. De-escalate the moment the student re-engages with a real answer.
 
 Rules:
-- Never claim an action is done. Tools create proposals awaiting the student's approval.
+- Never claim an action is done. Proposal tools only create cards awaiting the student's approval.
 - Propose at most 3 actions in a turn, and never duplicate something that already exists.
-- If you lack the context to be specific, ask a question instead of inventing details.
+- If you lack the context to be specific, search first; if it's still missing, ask instead of inventing details.
 - Keep your written reply warm, concrete, and under about 140 words: briefly say what you found and what you are proposing. The proposal cards carry the details.`;
+
+type Proposal = {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  reason?: string;
+};
+
+type ToolOutput = { type: "function_call_output"; call_id: string; output: string };
+
+function parseArgs(raw: string | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 export async function POST(request: Request) {
   if (!hasOpenAIEnv()) {
@@ -58,9 +82,11 @@ export async function POST(request: Request) {
   let context = "No saved workspace context yet.";
   let adminInstructions = "";
   let editableIndex = "";
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  let userId: string | null = null;
 
   if (hasSupabaseEnv()) {
-    const supabase = await createClient();
+    supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -68,6 +94,7 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    userId = user.id;
 
     const studentContext = await buildStudentSessionContext(supabase, user.id);
     context = formatStudentContextForPrompt(studentContext) || context;
@@ -81,6 +108,18 @@ export async function POST(request: Request) {
           }`,
       )
       .join("\n");
+
+    // Event-driven background work: keep the RAG index fresh without making
+    // the student wait. Runs after the response is sent.
+    const client = supabase;
+    const uid = user.id;
+    after(async () => {
+      try {
+        if (await isIndexStale(client, uid)) await indexWorkspaceForUser(client, uid);
+      } catch (error) {
+        console.error("Agent reindex failed:", error);
+      }
+    });
   }
 
   const conversation = parsed.data.messages
@@ -89,10 +128,12 @@ export async function POST(request: Request) {
     .join("\n");
 
   const openai = getOpenAI();
-  const response = await openai.responses.create({
+  const tools = AGENT_TOOLS as unknown as OpenAI.Responses.Tool[];
+
+  let response = await openai.responses.create({
     model: env.openaiModel,
     tool_choice: "auto",
-    tools: AGENT_TOOLS as unknown as OpenAI.Responses.Tool[],
+    tools,
     input: [
       {
         role: "system",
@@ -112,31 +153,65 @@ export async function POST(request: Request) {
     ],
   });
 
-  const proposedActions: Array<{
-    id: string;
-    tool: string;
-    args: Record<string, unknown>;
-    reason?: string;
-  }> = [];
+  const proposals: Proposal[] = [];
+  const seen = new Set<string>();
+  const trace: string[] = [];
+  let message = response.output_text ?? "";
 
-  for (const item of response.output ?? []) {
-    if (item.type !== "function_call" || !isAgentToolName(item.name)) continue;
-    let args: Record<string, unknown> = {};
-    try {
-      args = JSON.parse(item.arguments || "{}") as Record<string, unknown>;
-    } catch {
-      args = {};
+  // Orchestration loop: execute read tools, collect write proposals, and feed
+  // every tool result back until the model answers in plain text.
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const outputs: ToolOutput[] = [];
+
+    for (const item of response.output ?? []) {
+      if (item.type !== "function_call") continue;
+      const args = parseArgs(item.arguments);
+      let output: string;
+
+      if (item.name === "search_workspace") {
+        const query = typeof args.query === "string" ? args.query : "";
+        trace.push(`Searched workspace: ${query}`);
+        output =
+          supabase && userId
+            ? await searchWorkspace(supabase, userId, query)
+            : "Workspace search is unavailable right now.";
+      } else if (isAgentToolName(item.name)) {
+        const key = `${item.name}:${JSON.stringify(args)}`;
+        if (!seen.has(key) && proposals.length < 5) {
+          seen.add(key);
+          proposals.push({
+            id: item.call_id ?? item.id ?? crypto.randomUUID(),
+            tool: item.name,
+            args,
+            reason: typeof args.reason === "string" ? args.reason : undefined,
+          });
+        }
+        output =
+          "Shown to the student as a proposal card awaiting their approval. It has NOT been done yet — do not say it was.";
+      } else {
+        output = "Unknown tool.";
+      }
+
+      outputs.push({ type: "function_call_output", call_id: item.call_id, output });
     }
-    proposedActions.push({
-      id: item.call_id ?? item.id ?? crypto.randomUUID(),
-      tool: item.name,
-      args,
-      reason: typeof args.reason === "string" ? args.reason : undefined,
+
+    if (!outputs.length || step === MAX_STEPS - 1) break;
+
+    response = await openai.responses.create({
+      model: env.openaiModel,
+      tool_choice: "auto",
+      tools,
+      previous_response_id: response.id,
+      input: outputs,
     });
+    if (response.output_text) message = response.output_text;
   }
 
-  return NextResponse.json({
-    message: response.output_text ?? "",
-    proposedActions,
-  });
+  if (!message.trim()) {
+    message = proposals.length
+      ? "Here is what I would suggest. Approve anything useful, or tell me what is actually on your mind."
+      : "Tell me a bit more about what you want to work on, and I will take it from there.";
+  }
+
+  return NextResponse.json({ message, proposedActions: proposals, trace });
 }
