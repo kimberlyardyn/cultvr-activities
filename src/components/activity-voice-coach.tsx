@@ -76,7 +76,7 @@ const COACH_INSTRUCTIONS = [
   "",
   "Category MUST be one of: Academic, Art, Athletic - Club, Athletic - JV/Varsity, Career-Oriented, Community Service (Volunteer), Computer/Technology, Cultural, Dance, Debate/Speech, Environmental, Family Responsibilities, Foreign Exchange, Internship, Journalism/Publication, LGBT, Music: Instrumental, Music: Vocal, Religious, Research, Robotics, School Spirit, Science/Math, Social Justice, Speech & Debate, Student Govt./Politics, Theater/Drama, Work (Paid), Other Club/Activity.",
   "",
-  "When you've covered the sections and they sound done, give a brief verbal summary and let them know everything — including any goals — has been added to the form for them to review or refine before saving.",
+  "WRAPPING UP: When you've covered the sections and they sound done, do NOT recite a summary of what you captured. Instead, tell them everything is filled in on the form, and ask them to look it over, e.g. 'Take a look at the form — does anything need adjusting? A detail that's off, something missing, or wording you'd change?' If they name a change, make it right away with `update_fields`, confirm it out loud in a few words, and ask whether anything else needs a tweak. Once they say it looks good, let them know they can save it.",
 ].join(" ");
 
 const UPDATE_FIELDS_TOOL = {
