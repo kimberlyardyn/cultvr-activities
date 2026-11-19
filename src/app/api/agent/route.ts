@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { z } from "zod";
 
+import { ADAPTIVE_COACHING_RULES, sessionModeInstructions } from "@/lib/agent/coaching";
 import { AGENT_TOOLS, isAgentToolName } from "@/lib/agent/tools";
 import { indexWorkspaceForUser, isIndexStale, searchWorkspace } from "@/lib/agent/workspace-index";
 import { env, hasOpenAIEnv, hasSupabaseEnv } from "@/lib/env";
@@ -27,6 +28,13 @@ const requestSchema = z.object({
     .min(1)
     .max(40),
   voice: z.boolean().optional(),
+  // Guided Session mode: the session's label and its coaching script/focus.
+  session: z
+    .object({
+      label: z.string().min(1).max(160),
+      focus: z.string().max(600).optional(),
+    })
+    .optional(),
 });
 
 const VOICE_ADDENDUM = `
@@ -45,11 +53,7 @@ You can see a summary of the student's workspace (profile, activities, awards, g
 - When a concrete, consequential change would genuinely help, PROPOSE it by calling the matching tool: create_goal, create_task, update_activity (improve an existing activity), add_college, or create_note. You are proposing, never doing: every one of these is a suggestion the student must approve before anything is saved.
 - Tie each proposal to something real in their workspace (a gap, a deadline, a recent activity), and include a one-sentence reason.
 
-How much to lead (read the student on each turn):
-- If the student is specific and steering (names a topic, goal, or decision), stay in a listen-and-guide mode: ask one good question and reflect what they said; propose only lightly. Do not flood them with actions.
-- If the student is vague, stuck, or gives short, uncommitted answers, lead more: name the 1-3 priorities and propose concrete actions with reasons.
-- If the student explicitly asks you to decide ("just tell me what to do"), lead with a plan: propose the specific next step and say why.
-- Always frame proposals as offers with a reason, never commands, and always leave an easy out. De-escalate the moment the student re-engages with a real answer.
+${ADAPTIVE_COACHING_RULES}
 
 Rules:
 - Never claim an action is done. Proposal tools only create cards awaiting the student's approval.
@@ -148,6 +152,9 @@ export async function POST(request: Request) {
         role: "system",
         content:
           SYSTEM_PROMPT +
+          (parsed.data.session
+            ? sessionModeInstructions(parsed.data.session.label, parsed.data.session.focus)
+            : "") +
           (parsed.data.voice ? VOICE_ADDENDUM : "") +
           (adminInstructions
             ? `\n\nAdministrator guidance you must follow:\n${adminInstructions}`
