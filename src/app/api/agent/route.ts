@@ -30,6 +30,12 @@ You can see the student's workspace context (profile, activities, awards, goals,
 - When a concrete, consequential change would genuinely help (a new goal, or a new task/deadline), PROPOSE it by calling the matching tool. You are proposing, never doing: every tool call is a suggestion the student must approve before anything is saved.
 - Tie each proposal to something real in their workspace (a gap, a deadline, a recent activity), and include a one-sentence reason.
 
+How much to lead (read the student on each turn):
+- If the student is specific and steering (names a topic, goal, or decision), stay in a listen-and-guide mode: ask one good question and reflect what they said; propose only lightly. Do not flood them with actions.
+- If the student is vague, stuck, or gives short, uncommitted answers, lead more: name the 1-3 priorities and propose concrete actions with reasons.
+- If the student explicitly asks you to decide ("just tell me what to do"), lead with a plan: propose the specific next step and say why.
+- Always frame proposals as offers with a reason, never commands, and always leave an easy out. De-escalate the moment the student re-engages with a real answer.
+
 Rules:
 - Never claim an action is done. Tools create proposals awaiting the student's approval.
 - Propose at most 3 actions in a turn, and never duplicate something that already exists.
@@ -51,6 +57,7 @@ export async function POST(request: Request) {
 
   let context = "No saved workspace context yet.";
   let adminInstructions = "";
+  let editableIndex = "";
 
   if (hasSupabaseEnv()) {
     const supabase = await createClient();
@@ -65,6 +72,15 @@ export async function POST(request: Request) {
     const studentContext = await buildStudentSessionContext(supabase, user.id);
     context = formatStudentContextForPrompt(studentContext) || context;
     adminInstructions = studentContext.adminInstructions;
+    editableIndex = studentContext.activities
+      .slice(0, 12)
+      .map(
+        (activity) =>
+          `- [${activity.id}] ${activity.name}${activity.role ? ` (${activity.role})` : ""}${
+            activity.impact ? ` — impact: ${activity.impact}` : " — no impact statement yet"
+          }`,
+      )
+      .join("\n");
   }
 
   const conversation = parsed.data.messages
@@ -88,7 +104,10 @@ export async function POST(request: Request) {
       },
       {
         role: "user",
-        content: `Student workspace context:\n${context}\n\nConversation so far:\n${conversation}`,
+        content:
+          `Student workspace context:\n${context}\n\n` +
+          `Activities you can improve with update_activity (use the exact id in brackets):\n${editableIndex || "none yet"}\n\n` +
+          `Conversation so far:\n${conversation}`,
       },
     ],
   });

@@ -74,6 +74,22 @@ export async function POST(request: Request) {
           .insert({ title, due_date: due_date || null, user_id: user.id });
         if (error) throw new Error(error.message);
         results.push({ id: action.id, tool: action.tool, ok: true, detail: `Task created: ${title}` });
+      } else if (action.tool === "update_activity") {
+        const { activity_id, impact, description } = argParse.data as {
+          activity_id: string;
+          impact?: string | null;
+          description?: string | null;
+        };
+        const updates: Record<string, string> = {};
+        if (impact) updates.impact = impact;
+        if (description) updates.description = description;
+        if (Object.keys(updates).length === 0) {
+          results.push({ id: action.id, tool: action.tool, ok: false, detail: "No changes provided." });
+        } else {
+          const { error } = await supabase.from("activities").update(updates).eq("id", activity_id);
+          if (error) throw new Error(error.message);
+          results.push({ id: action.id, tool: action.tool, ok: true, detail: "Activity updated." });
+        }
       }
     } catch (e) {
       results.push({

@@ -25,13 +25,19 @@ const STARTERS = [
   "Help me get organized for my next application.",
 ];
 
-export function AgentPanel() {
+export function AgentPanel({
+  initialMessages = [],
+  initialProposals = [],
+}: {
+  initialMessages?: ChatMessage[];
+  initialProposals?: Proposal[];
+}) {
   const router = useRouter();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
