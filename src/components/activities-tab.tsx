@@ -566,10 +566,10 @@ function ActivityCard({
   // sub-sections read as repetitive "(0)" noise — so we collapse them into one
   // friendly nudge until the student opts to expand them.
   const [showBareSections, setShowBareSections] = useState(false);
-  // Collapsed by default so the dashboard stays scannable — name + position
-  // only, with the rest (description, dates, tags, goals…) behind a click.
-  // Sample cards start open so the template preview is visible.
-  const [expanded, setExpanded] = useState(isSample);
+  // Collapsed by default (sample cards included) so the list stays scannable —
+  // name + position only, with the rest (description, dates, tags, goals…)
+  // behind a click.
+  const [expanded, setExpanded] = useState(false);
   const start = activity.start_date ?? "";
   const end = activity.in_progress ? "Present" : activity.end_date ?? "";
   const dateRange = start || end ? `${start || "—"} → ${end || "—"}` : null;

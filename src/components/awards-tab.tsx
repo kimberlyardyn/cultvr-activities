@@ -455,7 +455,7 @@ function AwardCard({
   const linkedActivity = activities.find((a) => a.id === award.activity_id);
   // Collapsed by default so the dashboard stays scannable — just the title,
   // with details/tags/goals behind a click. Samples start open as previews.
-  const [expanded, setExpanded] = useState(isSample);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <article
