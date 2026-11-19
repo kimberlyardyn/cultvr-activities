@@ -5,10 +5,12 @@ import {
   Check,
   Lightbulb,
   Loader2,
+  Mic,
   MinusCircle,
   RotateCcw,
   Search,
   Sparkles,
+  Square,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -20,8 +22,16 @@ import {
   TOOL_META,
   type AgentToolName,
 } from "@/lib/agent/tools";
+import { useVoiceConversation, type VoicePhase } from "@/components/use-voice-conversation";
 
-type ChatMessage = { role: "user" | "agent"; text: string; trace?: string[] };
+type ChatMessage = { role: "user" | "agent"; text: string; trace?: string[]; spoken?: boolean };
+
+const VOICE_LABELS: Record<Exclude<VoicePhase, "off">, string> = {
+  listening: "Listening… go ahead",
+  hearing: "Hearing you…",
+  thinking: "Thinking…",
+  speaking: "Speaking",
+};
 type Proposal = {
   id: string;
   tool: AgentToolName;
@@ -67,8 +77,11 @@ export function AgentPanel({
   initialLog = [],
   compact = false,
   preview = false,
+  active = true,
   onAttentionChange,
 }: {
+  /** False while the panel is hidden (e.g. dock closed) — ends voice mode. */
+  active?: boolean;
   initialMessages?: ChatMessage[];
   initialProposals?: Proposal[];
   initialInsights?: AgentInsight[];
@@ -121,11 +134,14 @@ export function AgentPanel({
   }, [messages, thinking, proposals.length]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { voice?: boolean }): Promise<string | null> => {
       const trimmed = text.trim();
-      if (!trimmed || thinking || preview) return;
+      if (!trimmed || thinking || preview) return null;
       setError(null);
-      const nextMessages: ChatMessage[] = [...messages, { role: "user", text: trimmed }];
+      const nextMessages: ChatMessage[] = [
+        ...messages,
+        { role: "user", text: trimmed, spoken: opts?.voice },
+      ];
       setMessages(nextMessages);
       setInput("");
       setThinking(true);
@@ -138,6 +154,7 @@ export function AgentPanel({
               role: m.role === "agent" ? "assistant" : "user",
               content: m.text,
             })),
+            voice: Boolean(opts?.voice),
           }),
         });
         const data = await res.json();
@@ -156,14 +173,25 @@ export function AgentPanel({
             )
           : [];
         if (incoming.length) setProposals((cur) => [...cur, ...incoming]);
+        return (data.message as string) || null;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
+        return null;
       } finally {
         setThinking(false);
       }
     },
     [messages, thinking, preview],
   );
+
+  const voice = useVoiceConversation({ onUtterance: (text) => send(text, { voice: true }) });
+  const stopVoice = voice.stop;
+  const voiceOn = voice.phase !== "off";
+
+  useEffect(() => {
+    // Hiding the agent (e.g. closing the dock) ends any voice conversation.
+    if (!active) stopVoice();
+  }, [active, stopVoice]);
 
   const execute = useCallback(
     async (actions: Proposal[], busyKey: string) => {
@@ -376,6 +404,7 @@ export function AgentPanel({
                     : "bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)]",
                 ].join(" ")}
               >
+                {m.spoken && <Mic aria-label="Spoken" className="-mt-0.5 mr-1.5 inline opacity-70" size={12} />}
                 {m.text}
               </p>
             </div>
@@ -518,6 +547,46 @@ export function AgentPanel({
         </p>
       )}
       {error && <p className="text-xs text-[#c4697a]">{error}</p>}
+      {voice.notice && !voiceOn && (
+        <p className="text-xs text-[color:var(--almanac-ink-soft)]">{voice.notice}</p>
+      )}
+
+      {voiceOn && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-3 py-2 text-xs text-[color:var(--almanac-ink)]">
+          <span className="flex items-center gap-2">
+            <span
+              className={[
+                "size-2 rounded-full",
+                voice.phase === "listening" || voice.phase === "hearing"
+                  ? "bg-[#c4697a]"
+                  : "bg-[color:var(--almanac-ink-soft)]",
+                voice.phase === "hearing" || voice.phase === "speaking" ? "animate-pulse" : "",
+              ].join(" ")}
+            />
+            {voice.phase === "off" ? "" : VOICE_LABELS[voice.phase]}
+          </span>
+          <span className="flex items-center gap-1">
+            {(voice.phase === "listening" || voice.phase === "hearing") && (
+              <button
+                className="rounded-md px-2 py-1 font-medium transition hover:bg-black/5"
+                onClick={voice.finishTurn}
+                type="button"
+              >
+                Done talking
+              </button>
+            )}
+            {voice.phase === "speaking" && (
+              <button
+                className="rounded-md px-2 py-1 font-medium transition hover:bg-black/5"
+                onClick={voice.interrupt}
+                type="button"
+              >
+                Interrupt
+              </button>
+            )}
+          </span>
+        </div>
+      )}
 
       <form
         className="flex items-end gap-2"
@@ -526,6 +595,22 @@ export function AgentPanel({
           send(input);
         }}
       >
+        {!preview && (
+          <button
+            aria-label={voiceOn ? "End voice conversation" : "Talk to the agent"}
+            className={[
+              "inline-flex size-11 shrink-0 items-center justify-center rounded-xl border transition",
+              voiceOn
+                ? "border-transparent bg-[#c4697a] text-white hover:opacity-90"
+                : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)] hover:bg-black/[0.04]",
+            ].join(" ")}
+            onClick={voiceOn ? stopVoice : () => void voice.start()}
+            title={voiceOn ? "End voice conversation" : "Talk to the agent"}
+            type="button"
+          >
+            {voiceOn ? <Square size={14} /> : <Mic size={17} />}
+          </button>
+        )}
         <textarea
           className="max-h-32 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] px-3.5 py-2.5 text-sm text-[color:var(--almanac-ink)] outline-none placeholder:text-[color:var(--almanac-ink-soft)] focus:border-[color:var(--almanac-olive)]"
           onChange={(e) => setInput(e.target.value)}
