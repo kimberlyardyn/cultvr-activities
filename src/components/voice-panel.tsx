@@ -15,6 +15,8 @@ type VoicePanelProps = {
   sessionPrompts?: readonly string[];
   sessionTitle?: string;
   variant?: "default" | "almanac";
+  /** New coach (beta): ask the server to apply the adaptive-coaching rules. */
+  adaptiveCoach?: boolean;
 };
 
 export function VoicePanel({
@@ -25,6 +27,7 @@ export function VoicePanel({
   sessionPrompts,
   sessionTitle,
   variant = "default",
+  adaptiveCoach = false,
 }: VoicePanelProps) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [messages, setMessages] = useState<Array<{ role: "student" | "coach"; text: string }>>(
@@ -79,6 +82,7 @@ export function VoicePanel({
           sessionFocus,
           sessionPrompts,
           sessionTitle,
+          adaptiveCoach,
         }),
       });
       const tokenData = await tokenResponse.json();

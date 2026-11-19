@@ -22,6 +22,7 @@ import {
   TOOL_META,
   type AgentToolName,
 } from "@/lib/agent/tools";
+import { ProposalCards } from "@/components/agent-proposals";
 import { useVoiceConversation, type VoicePhase } from "@/components/use-voice-conversation";
 
 type ChatMessage = { role: "user" | "agent"; text: string; trace?: string[]; spoken?: boolean };
@@ -418,73 +419,14 @@ export function AgentPanel({
           </div>
         )}
 
-        {proposals.length > 0 && (
-          <div className="rounded-2xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] p-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--almanac-ink-soft)]">
-                Proposed actions · Awaiting approval
-              </p>
-              <span className="rounded-full bg-[#E0B26B]/30 px-2 py-0.5 text-[0.68rem] font-semibold text-[color:var(--almanac-ink)]">
-                {proposals.length} pending
-              </span>
-            </div>
-
-            <div className="mt-3 grid gap-2.5">
-              {proposals.map((p) => (
-                <div
-                  className="rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper-deep)] p-3"
-                  key={p.id}
-                >
-                  <div className={compact ? "grid gap-2" : "flex items-start justify-between gap-3"}>
-                    <div className="min-w-0">
-                      <p className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--almanac-ink-soft)]">
-                        {TOOL_META[p.tool].label}
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium text-[color:var(--almanac-ink)]">
-                        {summarizeAction(p.tool, p.args)}
-                      </p>
-                      {p.reason && (
-                        <p className="mt-1 text-xs leading-5 text-[color:var(--almanac-ink-soft)]">{p.reason}</p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 gap-1.5">
-                      <button
-                        className="inline-flex items-center gap-1 rounded-lg bg-[color:var(--almanac-ink)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--almanac-paper)] transition hover:opacity-90 disabled:opacity-60"
-                        disabled={busy !== null}
-                        onClick={() => execute([p], p.id)}
-                        type="button"
-                      >
-                        {busy === p.id ? <Loader2 className="animate-spin" size={12} /> : <Check size={12} />}
-                        {TOOL_META[p.tool].verb}
-                      </button>
-                      <button
-                        aria-label="Dismiss"
-                        className="rounded-lg p-1.5 text-[color:var(--almanac-ink-soft)] transition hover:bg-black/5 hover:text-[color:var(--almanac-ink)] disabled:opacity-60"
-                        disabled={busy !== null}
-                        onClick={() => dismissProposal(p)}
-                        type="button"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {proposals.length > 1 && (
-              <button
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--almanac-rule)] px-3 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/[0.04] disabled:opacity-60"
-                disabled={busy !== null}
-                onClick={() => execute(proposals, "all")}
-                type="button"
-              >
-                {busy === "all" ? <Loader2 className="animate-spin" size={12} /> : <Check size={12} />}
-                Approve all
-              </button>
-            )}
-          </div>
-        )}
+        <ProposalCards
+          busy={busy}
+          compact={compact}
+          onApprove={(p) => execute([p], p.id)}
+          onApproveAll={() => execute(proposals, "all")}
+          onDismiss={dismissProposal}
+          proposals={proposals}
+        />
 
         {history.length > 0 && (
           <div className="pt-1">

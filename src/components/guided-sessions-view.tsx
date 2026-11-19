@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, Loader2, Mic, Pencil, Square, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic, Pencil, Sparkles, Square, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   useEffect,
   useRef,
@@ -17,8 +18,15 @@ import {
   toggleNoteLink,
   updateNote,
 } from "@/app/dashboard/actions";
+import {
+  executeAgentActions,
+  logDismissedProposal,
+  ProposalCards,
+  type AgentProposal,
+} from "@/components/agent-proposals";
 import { toast } from "@/components/toast";
 import { VoicePanel } from "@/components/voice-panel";
+import { isAgentToolName } from "@/lib/agent/tools";
 import type { Activity, Award, Goal, Note } from "@/lib/types";
 
 // Each session has a single warm `opener` (the coach's first question) and at
@@ -223,6 +231,10 @@ const ACTION_PLAN_WINDOWS = [
 ] as const;
 type ActionPlanWindowId = (typeof ACTION_PLAN_WINDOWS)[number]["id"];
 
+// Beta switch: run Guided Sessions on the agent (adaptive coaching, workspace
+// search, approval-gated actions). Remembered per browser; off by default.
+const NEW_COACH_KEY = "cultvr-new-coach-sessions";
+
 export function GuidedSessionsView({
   activities,
   awards,
@@ -252,6 +264,33 @@ export function GuidedSessionsView({
   const [linkedGoalIds, setLinkedGoalIds] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [newCoach, setNewCoach] = useState(false);
+  const [sessionProposals, setSessionProposals] = useState<AgentProposal[]>([]);
+  const [proposalBusy, setProposalBusy] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    let saved = false;
+    try {
+      saved = localStorage.getItem(NEW_COACH_KEY) === "1";
+    } catch {
+      saved = false;
+    }
+    // Restore the per-browser beta preference after mount (SSR-safe).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setNewCoach(true);
+  }, []);
+
+  function toggleNewCoach() {
+    const next = !newCoach;
+    setNewCoach(next);
+    setSessionProposals([]);
+    try {
+      localStorage.setItem(NEW_COACH_KEY, next ? "1" : "0");
+    } catch {
+      // preference just won't persist
+    }
+  }
 
   // Handoff from the Activities list "Deepen this activity" link: if an id was
   // stashed, open the Deepen Current Activity session with it pre-selected.
@@ -391,16 +430,31 @@ export function GuidedSessionsView({
     });
 
     try {
-      const res = await fetch("/api/chat", {
+      // New coach (beta): the agent runs the session with the same focus.
+      const res = await fetch(newCoach ? "/api/agent" : "/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: history,
-          sessionType: selected.label,
-          sessionFocus: effectiveFocus,
-        }),
+        body: JSON.stringify(
+          newCoach
+            ? {
+                messages: history.slice(-40),
+                session: { label: selected.label, focus: effectiveFocus },
+              }
+            : {
+                messages: history,
+                sessionType: selected.label,
+                sessionFocus: effectiveFocus,
+              },
+        ),
       });
-      const data = (await res.json()) as { message?: string };
+      const data = (await res.json()) as {
+        message?: string;
+        proposedActions?: Array<AgentProposal & { tool: string }>;
+      };
+      if (newCoach && Array.isArray(data.proposedActions)) {
+        const incoming = data.proposedActions.filter((p) => isAgentToolName(p.tool));
+        if (incoming.length) setSessionProposals((cur) => [...cur, ...incoming]);
+      }
       const reply =
         data.message?.trim() ||
         "I'm having trouble responding right now — tell me a bit more.";
@@ -452,8 +506,39 @@ export function GuidedSessionsView({
     setMode("live");
   }
 
+  async function approveSessionProposals(list: AgentProposal[], busyKey: string) {
+    if (!list.length) return;
+    setProposalBusy(busyKey);
+    try {
+      const { results } = await executeAgentActions(list);
+      const done = new Set(list.map((p) => p.id));
+      setSessionProposals((cur) => cur.filter((p) => !done.has(p.id)));
+      // Record what the coach did in the session, so it lands in the saved note.
+      const lines = results.map((r) =>
+        r.ok ? `Coach action: ${r.detail}` : `Coach action (not applied): ${r.detail}`,
+      );
+      setTranscript((current) => {
+        const next = [current, ...lines].filter(Boolean).join("\n");
+        setDraftNoteBody(buildSessionSummary(selected, answers, next));
+        return next;
+      });
+      results.forEach((r) => (r.ok ? toast.success(r.detail) : toast.error(r.detail)));
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not apply the action.");
+    } finally {
+      setProposalBusy(null);
+    }
+  }
+
+  function dismissSessionProposal(proposal: AgentProposal) {
+    setSessionProposals((cur) => cur.filter((p) => p.id !== proposal.id));
+    logDismissedProposal(proposal);
+  }
+
   function clearChat() {
     setChatMessages([]);
+    setSessionProposals([]);
     setChatSuggestions([]);
     setTranscript("");
     setTypedEntry("");
@@ -570,6 +655,7 @@ export function GuidedSessionsView({
     setSelectedAwardId(null);
     setDeepenKind("activity");
     setChatMessages([]);
+    setSessionProposals([]);
     setChatLoading(false);
     setChatSuggestions([]);
     setActionPlanWindow("none");
@@ -663,6 +749,23 @@ export function GuidedSessionsView({
                 <p className="mt-2 max-w-xl text-xs leading-5 text-white/72 md:mt-3 md:text-sm md:leading-6">
                   {selected.focus}
                 </p>
+                {mode === "live" && !isFreeform ? (
+                  <button
+                    aria-pressed={newCoach}
+                    className={[
+                      "mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                      newCoach
+                        ? "border-transparent bg-[color:var(--almanac-butter)] text-[color:var(--almanac-ink)]"
+                        : "border-white/20 text-white/75 hover:bg-white/10",
+                    ].join(" ")}
+                    onClick={toggleNewCoach}
+                    title="Run this session on the Cultvr Agent: adapts how much it leads, can look things up in your workspace, and suggests actions for you to approve."
+                    type="button"
+                  >
+                    <Sparkles size={12} />
+                    New coach (beta): {newCoach ? "On" : "Off"}
+                  </button>
+                ) : null}
               </div>
               {mode === "live" && !isFreeform ? (
                 <div className="relative inline-flex h-10 w-full max-w-[14rem] shrink-0 items-center self-start rounded-full border border-white/15 bg-white/5 p-1 text-sm font-medium xl:h-11 xl:w-36">
@@ -748,6 +851,7 @@ export function GuidedSessionsView({
                   sessionPrompts={selected.prompts}
                   sessionTitle={selected.label}
                   variant="almanac"
+                  adaptiveCoach={newCoach}
                 />
               ) : (
                 <TextSession
@@ -771,6 +875,15 @@ export function GuidedSessionsView({
                   value={typedEntry}
                 />
               )}
+              {activityReady && interactionMode === "text" ? (
+                <ProposalCards
+                  busy={proposalBusy}
+                  onApprove={(p) => approveSessionProposals([p], p.id)}
+                  onApproveAll={() => approveSessionProposals(sessionProposals, "all")}
+                  onDismiss={dismissSessionProposal}
+                  proposals={sessionProposals}
+                />
+              ) : null}
                 </>
               )}
             </div>

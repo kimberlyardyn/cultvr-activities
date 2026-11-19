@@ -7,6 +7,7 @@ import {
   buildStudentSessionContext,
   createPersonalizedSessionPlan,
 } from "@/lib/student-context";
+import { ADAPTIVE_COACHING_RULES, VOICE_LADDER_NOTE } from "@/lib/agent/coaching";
 import { createClient } from "@/lib/supabase/server";
 import type { PersonalizedSessionPlan } from "@/lib/types";
 
@@ -15,6 +16,8 @@ const requestSchema = z.object({
   sessionFocus: z.string().max(500).nullable().optional(),
   sessionPrompts: z.array(z.string().max(1000)).max(10).optional(),
   sessionTitle: z.string().max(140).optional(),
+  // New coach (beta): apply the shared adaptive-coaching rules to live voice.
+  adaptiveCoach: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -63,6 +66,10 @@ async function createRealtimeToken(sessionRequest: z.infer<typeof requestSchema>
 
     instructions = buildRealtimeInstructions(plan, studentContext.adminInstructions);
     questionPlan = plan;
+  }
+
+  if (sessionRequest.adaptiveCoach) {
+    instructions += `\n\n${ADAPTIVE_COACHING_RULES}\n${VOICE_LADDER_NOTE}`;
   }
 
   const response = await fetch(
