@@ -113,7 +113,11 @@ export const WRITE_TOOLS = [
       type: "object",
       properties: {
         title: { type: "string", description: "Short note title (2-120 characters)." },
-        body: { type: "string", description: "The note content (2-6000 characters)." },
+        body: {
+          type: "string",
+          description:
+            "The note content (2-6000 characters). For a list or checklist, put one item per line, e.g. '- [ ] Draft the intro paragraph'.",
+        },
         category: {
           type: "string",
           description: "Optional category, e.g. Reflection, Essay Idea, Planning. Defaults to Reflection.",
