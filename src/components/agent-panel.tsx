@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   Check,
+  Keyboard,
   Lightbulb,
   Loader2,
   Mic,
@@ -26,6 +27,10 @@ import { ProposalCards } from "@/components/agent-proposals";
 import { useVoiceConversation, type VoicePhase } from "@/components/use-voice-conversation";
 
 type ChatMessage = { role: "user" | "agent"; text: string; trace?: string[]; spoken?: boolean };
+
+// Voice is the default way to talk to the agent; the student's choice of
+// voice vs. typing is remembered per browser.
+const INPUT_MODE_KEY = "cultvr-agent-input-mode";
 
 const VOICE_LABELS: Record<Exclude<VoicePhase, "off">, string> = {
   listening: "Listening… go ahead",
@@ -188,6 +193,34 @@ export function AgentPanel({
   const voice = useVoiceConversation({ onUtterance: (text) => send(text, { voice: true }) });
   const stopVoice = voice.stop;
   const voiceOn = voice.phase !== "off";
+  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
+  const [voiceSupported, setVoiceSupported] = useState(true);
+
+  useEffect(() => {
+    const supported =
+      Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined";
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(INPUT_MODE_KEY);
+    } catch {
+      saved = null;
+    }
+    // Restore the remembered input mode after mount (SSR-safe); fall back to
+    // typing where the browser can't record audio.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVoiceSupported(supported);
+    if (!supported || preview || saved === "text") setInputMode("text");
+  }, [preview]);
+
+  function switchInputMode(mode: "voice" | "text") {
+    setInputMode(mode);
+    if (mode === "text") stopVoice();
+    try {
+      localStorage.setItem(INPUT_MODE_KEY, mode);
+    } catch {
+      // preference just won't persist
+    }
+  }
 
   useEffect(() => {
     // Hiding the agent (e.g. closing the dock) ends any voice conversation.
@@ -364,9 +397,9 @@ export function AgentPanel({
         {fresh ? (
           <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
             <p className="max-w-sm text-sm leading-6 text-[color:var(--almanac-ink-soft)]">
-              What is on your mind today? Ask the agent to review your workspace, plan your next
-              application, or find what needs attention. It will suggest concrete actions for you to
-              approve.
+              {inputMode === "voice"
+                ? "What is on your mind today? Tap the mic below and just talk. Or start with one of these:"
+                : "What is on your mind today? Ask the agent to review your workspace, plan your next application, or find what needs attention. It will suggest concrete actions for you to approve."}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {STARTERS.map((starter) => (
@@ -530,6 +563,47 @@ export function AgentPanel({
         </div>
       )}
 
+      {inputMode === "voice" ? (
+        <div className="flex items-center gap-3">
+          <button
+            aria-label={voiceOn ? "End voice conversation" : "Tap to talk"}
+            className={[
+              "relative inline-flex shrink-0 items-center justify-center rounded-full transition",
+              compact ? "size-12" : "size-14",
+              voiceOn
+                ? "bg-[#c4697a] text-white hover:opacity-90"
+                : "bg-[color:var(--almanac-ink)] text-[color:var(--almanac-paper)] shadow-[0_8px_24px_rgba(31,36,51,0.25)] hover:opacity-90",
+            ].join(" ")}
+            onClick={voiceOn ? stopVoice : () => void voice.start()}
+            title={voiceOn ? "End voice conversation" : "Tap to talk"}
+            type="button"
+          >
+            {!voiceOn && fresh ? (
+              <span
+                aria-hidden
+                className="absolute inset-0 animate-ping rounded-full bg-[color:var(--almanac-ink)] opacity-15"
+              />
+            ) : null}
+            {voiceOn ? <Square size={18} /> : <Mic size={compact ? 20 : 22} />}
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[color:var(--almanac-ink)]">
+              {voiceOn ? "Voice conversation on" : "Tap to talk"}
+            </p>
+            <p className="text-xs text-[color:var(--almanac-ink-soft)]">
+              {voiceOn ? "Tap the red button to end." : "I will listen, then answer out loud."}
+            </p>
+          </div>
+          <button
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[color:var(--almanac-rule)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--almanac-ink)] transition hover:bg-black/[0.04]"
+            onClick={() => switchInputMode("text")}
+            type="button"
+          >
+            <Keyboard size={13} />
+            Type instead
+          </button>
+        </div>
+      ) : (
       <form
         className="flex items-end gap-2"
         onSubmit={(e) => {
@@ -537,20 +611,18 @@ export function AgentPanel({
           send(input);
         }}
       >
-        {!preview && (
+        {!preview && voiceSupported && (
           <button
-            aria-label={voiceOn ? "End voice conversation" : "Talk to the agent"}
-            className={[
-              "inline-flex size-11 shrink-0 items-center justify-center rounded-xl border transition",
-              voiceOn
-                ? "border-transparent bg-[#c4697a] text-white hover:opacity-90"
-                : "border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)] hover:bg-black/[0.04]",
-            ].join(" ")}
-            onClick={voiceOn ? stopVoice : () => void voice.start()}
-            title={voiceOn ? "End voice conversation" : "Talk to the agent"}
+            aria-label="Switch to voice"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-[color:var(--almanac-rule)] bg-[color:var(--almanac-paper)] text-[color:var(--almanac-ink)] transition hover:bg-black/[0.04]"
+            onClick={() => {
+              switchInputMode("voice");
+              void voice.start();
+            }}
+            title="Switch to voice"
             type="button"
           >
-            {voiceOn ? <Square size={14} /> : <Mic size={17} />}
+            <Mic size={17} />
           </button>
         )}
         <textarea
@@ -575,6 +647,7 @@ export function AgentPanel({
           Send
         </button>
       </form>
+      )}
     </section>
   );
 }
